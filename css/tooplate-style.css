@@ -450,6 +450,7 @@ b, strong {
   border-radius: 0 0 3px 3px;
   position: relative;
   bottom: 8px;
+  margin-top: 30%;
 }
 .contact-info p, .contact-info a {
   color: #f7f3f3;

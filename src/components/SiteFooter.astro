@@ -1,0 +1,26 @@
+---
+const isMemoryMap = Astro.url.pathname === import.meta.env.BASE_URL;
+const pathParts = Astro.url.pathname.split('/').filter(Boolean);
+const page = pathParts.at(-1);
+const view = isMemoryMap
+  ? 'memory map'
+  : page === 'profile'
+    ? 'symbol view'
+    : page === 'data'
+      ? '.data'
+      : page === 'projects'
+        ? '.pdata'
+        : page === 'about'
+          ? '.rsrc'
+        : pathParts.includes('web')
+          ? `.web.${page}`
+          : pathParts.includes('unmapped')
+            ? 'unmapped'
+            : 'post view';
+---
+
+<footer class="debugger-statusbar" id="about">
+  <span class="statusbar-main"><strong>AU:</strong> <span data-analysis-status>idle</span></span>
+  <span class="statusbar-view"><strong>VIEW:</strong> {view}</span>
+  {isMemoryMap && <span class="statusbar-location"><strong>CURSOR:</strong> <span data-status-address>0000000000400000</span> <span data-status-location>.text</span></span>}
+</footer>

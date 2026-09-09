@@ -1,0 +1,193 @@
+---
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  socialTitle?: string;
+  socialImage?: string;
+  socialImageAlt?: string;
+  pageType?: 'website' | 'article';
+  publishedTime?: Date;
+}
+
+const {
+  title,
+  description,
+  socialTitle = title,
+  socialImage,
+  socialImageAlt = socialTitle,
+  pageType = 'website',
+  publishedTime,
+} = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site ?? 'https://bombobombone.github.io');
+const absoluteSocialImage = socialImage
+  ? new URL(socialImage.replace(/^\//, ''), Astro.site ?? 'https://bombobombone.github.io').toString()
+  : undefined;
+const base = import.meta.env.BASE_URL;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#070b10" />
+    <link rel="icon" type="image/png" sizes="256x256" href={`${base}favicon.png`} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content={pageType} />
+    <meta property="og:site_name" content="BomboBombone.exe" />
+    <meta property="og:title" content={socialTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    {absoluteSocialImage && <meta property="og:image" content={absoluteSocialImage} />}
+    {absoluteSocialImage && <meta property="og:image:secure_url" content={absoluteSocialImage} />}
+    {absoluteSocialImage && <meta property="og:image:width" content="1200" />}
+    {absoluteSocialImage && <meta property="og:image:height" content="630" />}
+    {absoluteSocialImage && <meta property="og:image:alt" content={socialImageAlt} />}
+    {publishedTime && <meta property="article:published_time" content={publishedTime.toISOString()} />}
+    <meta name="twitter:card" content={absoluteSocialImage ? 'summary_large_image' : 'summary'} />
+    <meta name="twitter:title" content={socialTitle} />
+    <meta name="twitter:description" content={description} />
+    {absoluteSocialImage && <meta name="twitter:image" content={absoluteSocialImage} />}
+    {absoluteSocialImage && <meta name="twitter:image:alt" content={socialImageAlt} />}
+    <title>{title}</title>
+  </head>
+  <body class="debugger-body">
+    <a class="skip-link" href="#debugger-content">Skip to debugger view</a>
+    <SiteHeader />
+    <div id="app-main"><slot /></div>
+    <SiteFooter />
+    <dialog class="column-dialog" aria-labelledby="column-dialog-title" data-column-dialog>
+      <form method="dialog">
+        <h2 id="column-dialog-title">Resize column</h2>
+        <p id="column-dialog-help">Choose a width with the slider or the narrower and wider buttons.</p>
+        <label for="column-width">Column width (pixels)</label>
+        <input id="column-width" type="range" aria-describedby="column-dialog-help" />
+        <output for="column-width" data-column-width-output></output>
+        <div class="column-dialog-actions">
+          <button type="button" data-column-narrower>Narrower</button>
+          <button type="button" data-column-wider>Wider</button>
+          <button type="submit" autofocus>Done</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>
+
+<script>
+  const resizableTables = document.querySelectorAll<HTMLElement>('[data-resizable-table]');
+  const columnDialog = document.querySelector<HTMLDialogElement>('[data-column-dialog]');
+  const columnWidth = document.querySelector<HTMLInputElement>('#column-width');
+  const columnOutput = document.querySelector<HTMLOutputElement>('[data-column-width-output]');
+  let changeColumnWidth: ((width: number) => void) | undefined;
+  const updateColumnWidth = (width: number) => {
+    if (!columnWidth || !columnOutput) return;
+    const bounded = Math.max(Number(columnWidth.min), Math.min(Number(columnWidth.max), width));
+    columnWidth.value = String(bounded);
+    columnOutput.value = `${bounded} px`;
+    changeColumnWidth?.(bounded);
+  };
+  columnWidth?.addEventListener('input', () => updateColumnWidth(Number(columnWidth.value)));
+  document.querySelector('[data-column-narrower]')?.addEventListener('click', () => updateColumnWidth(Number(columnWidth?.value) - 12));
+  document.querySelector('[data-column-wider]')?.addEventListener('click', () => updateColumnWidth(Number(columnWidth?.value) + 12));
+
+  resizableTables.forEach((table) => {
+    const headerCells = Array.from(table.querySelectorAll<HTMLElement>('.disassembly-column'));
+    const handles = Array.from(table.querySelectorAll<HTMLButtonElement>('.column-resizer'));
+    const minimumWidths: number[] = [112, 56, 180, 160];
+    const storageKey = `bombo-column-widths-${table.getAttribute('data-resize-key') || 'table'}`;
+
+    const setWidths = (widths: number[], persist = false): void => {
+      table.style.setProperty('--disassembly-columns', widths.map((width) => `${Math.round(width)}px`).join(' '));
+      handles.forEach((handle, index) => {
+        handle.setAttribute('aria-valuemin', String(minimumWidths[index]));
+        handle.setAttribute('aria-valuemax', String(Math.round(widths[index] + widths[index + 1] - minimumWidths[index + 1])));
+        handle.setAttribute('aria-valuenow', String(Math.round(widths[index])));
+      });
+      if (persist) {
+        try { localStorage.setItem(storageKey, JSON.stringify(widths.map((width) => Math.round(width)))); } catch {}
+      }
+    };
+
+    const measuredWidths = () => headerCells.map((cell) => cell.getBoundingClientRect().width);
+
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) || 'null') as unknown;
+      if (Array.isArray(saved) && saved.length === headerCells.length && saved.every((width, index): width is number => typeof width === 'number' && Number.isFinite(width) && width >= minimumWidths[index] && width <= 2000)) setWidths(saved);
+    } catch {}
+
+    const resize = (index: number, delta: number, startingWidths: number[]): void => {
+      const widths = [...startingWidths];
+      const minimumCurrent = minimumWidths[index] || 112;
+      const minimumNext = minimumWidths[index + 1] || 160;
+      const boundedDelta = Math.min(startingWidths[index + 1] - minimumNext, Math.max(minimumCurrent - startingWidths[index], delta));
+      widths[index] += boundedDelta;
+      widths[index + 1] -= boundedDelta;
+      setWidths(widths, true);
+    };
+
+    handles.forEach((handle, index) => {
+      let dragged = false;
+      handle.title = 'Click to choose a width; drag or use Left and Right arrows to resize';
+      handle.addEventListener('click', (event) => {
+        if (dragged && event.detail > 0) { dragged = false; return; }
+        if (!columnDialog || !columnWidth || !columnOutput) return;
+        const starting = measuredWidths();
+        columnWidth.min = String(minimumWidths[index]);
+        columnWidth.max = String(Math.round(starting[index] + starting[index + 1] - minimumWidths[index + 1]));
+        columnWidth.value = String(Math.round(starting[index]));
+        columnOutput.value = `${columnWidth.value} px`;
+        const title = document.querySelector('#column-dialog-title');
+        if (title) title.textContent = handle.getAttribute('aria-label') || 'Resize column';
+        changeColumnWidth = (width) => resize(index, width - starting[index], starting);
+        columnDialog.showModal();
+      });
+      const adjustWithKeyboard = (event: KeyboardEvent): void => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const step = event.shiftKey ? 40 : 12;
+        resize(index, event.key === 'ArrowRight' ? step : -step, measuredWidths());
+      };
+
+      handle.addEventListener('keydown', adjustWithKeyboard);
+      handle.addEventListener('pointerdown', (event: PointerEvent) => {
+        event.preventDefault();
+        handle.focus();
+        dragged = false;
+        const startingWidths = measuredWidths();
+        const startX = event.clientX;
+        handle.setPointerCapture(event.pointerId);
+        document.body.classList.add('is-resizing-columns');
+
+        const move = (moveEvent: PointerEvent): void => {
+          const delta = moveEvent.clientX - startX;
+          if (Math.abs(delta) > 3) dragged = true;
+          if (dragged) resize(index, delta, startingWidths);
+        };
+        const stop = (): void => {
+          document.body.classList.remove('is-resizing-columns');
+          handle.removeEventListener('pointermove', move);
+          handle.removeEventListener('pointerup', stop);
+          handle.removeEventListener('pointercancel', stop);
+        };
+
+        handle.addEventListener('pointermove', move);
+        handle.addEventListener('pointerup', stop);
+        handle.addEventListener('pointercancel', stop);
+      });
+    });
+  });
+
+  document.querySelectorAll<HTMLAnchorElement>('[data-history-back]').forEach((backLink) => {
+    backLink.addEventListener('click', (event) => {
+      if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      if (window.history.length <= 1 || !document.referrer || new URL(document.referrer).origin !== window.location.origin) return;
+      event.preventDefault();
+      window.history.back();
+    });
+  });
+</script>

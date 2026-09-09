@@ -1,0 +1,60 @@
+---
+import type { GetStaticPaths } from 'astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { webCategories } from '../../data/webCategories';
+
+interface UnmappedRegion {
+  slug: string;
+  name: string;
+  label: string;
+}
+
+export const getStaticPaths = (() => {
+  const standaloneRegions: UnmappedRegion[] = [
+    { slug: 'web', name: '.web', label: 'Web security' },
+    { slug: 'windows', name: '.windows', label: 'Windows internals' },
+    { slug: 'windows-um', name: '.windows.um', label: 'User-mode code' },
+    { slug: 'windows-km', name: '.windows.km', label: 'Kernel and drivers' },
+  ];
+  const regions: UnmappedRegion[] = [
+    ...standaloneRegions,
+    ...webCategories.map(({ slug, name, label }) => ({ slug, name, label })),
+  ];
+  return regions.map((region) => ({ params: { section: region.slug }, props: { region } }));
+}) satisfies GetStaticPaths;
+
+interface Props {
+  region: UnmappedRegion;
+}
+
+const { region } = Astro.props;
+const base = import.meta.env.BASE_URL;
+---
+
+<BaseLayout title={`${region.name} is unmapped — BomboBombone`} description={`No published entries are mapped to ${region.label}.`}>
+  <main class="disassembly-app" id="debugger-content" tabindex="-1">
+    <h1 class="sr-only">{region.name} is unmapped</h1>
+    <div class="disassembly-toolbar">
+      <a class="disassembly-back" href={base} data-history-back aria-label="Back to memory map"><span class="disassembly-back-icon" aria-hidden="true"></span><span>BACK</span></a>
+      <div class="disassembly-title"><strong>{region.name}</strong><span>UNMAPPED</span></div>
+      <span class="disassembly-count">0 symbols</span>
+    </div>
+
+    <section class="unmapped-view" aria-labelledby="unmapped-title">
+      <div class="unmapped-glyph" aria-hidden="true"><span>0x00</span><small>NO MAP</small></div>
+      <div class="unmapped-copy">
+        <p class="unmapped-address">STATUS_ACCESS_VIOLATION · {region.name}</p>
+        <h2 id="unmapped-title">Nothing is mapped here yet.</h2>
+        <p>{region.label} has no published entries.</p>
+        <details class="unmapped-probe">
+          <summary>Probe region</summary>
+          <pre aria-label="Probe result">&gt; xrefs {region.name}
+0 results
+&gt; strings --all
+"nice try"
+flag&#123;nothing_to_see_here_yet&#125;</pre>
+        </details>
+      </div>
+    </section>
+  </main>
+</BaseLayout>

@@ -1,0 +1,430 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import DebuggerRegionRow from '../components/DebuggerRegionRow.astro';
+import { buildAddressSpace, formatAddress } from '../data/addressSpace';
+
+const publishedPosts = await getCollection('posts', ({ data }) => data.published);
+const base = import.meta.env.BASE_URL;
+const { regions, mapStart, mapEnd, postAllocations } = buildAddressSpace(publishedPosts, base);
+const normalizeSearchText = (value: string) => value
+  .replace(/[`*_#[\]()>~|{}]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLowerCase();
+const searchablePosts = [...publishedPosts]
+  .sort((left, right) => right.data.date.getTime() - left.data.date.getTime())
+  .map((post, index) => ({
+    post,
+    allocation: postAllocations[post.slug],
+    index,
+    titleSearch: normalizeSearchText(post.data.title),
+    metaSearch: normalizeSearchText(`${post.slug} ${post.data.category} ${post.data.description}`),
+    bodySearch: normalizeSearchText(post.body),
+  }));
+const mapSpan = mapEnd - mapStart;
+const mapStyle = (base: string, size: string) => {
+  const left = ((Number.parseInt(base, 16) - mapStart) / mapSpan) * 100;
+  const width = (Number.parseInt(size, 16) / mapSpan) * 100;
+  return `--map-left:${left.toFixed(3)}%;--map-width:${width.toFixed(3)}%;`;
+};
+const childIdsByParent = regions.reduce<Record<string, string[]>>((groups, region) => {
+  if (region.parentId) groups[region.parentId] = [...(groups[region.parentId] ?? []), region.id];
+  return groups;
+}, {});
+
+---
+
+<BaseLayout title="BomboBombone — Memory Map" description="Marco Paciaroni's security research blog. Windows, iOS, and web security.">
+  <main class="memory-map-app" id="debugger-content" tabindex="-1" data-analysis-root>
+    <h1 class="sr-only">BomboBombone research memory map</h1>
+    <p class="sr-only" role="status" aria-live="polite" data-analysis-announcer></p>
+    <div class="map-toolbar">
+      <div class="map-title"><strong>MEMORY MAP</strong></div>
+      <label class="map-filter" for="region-search"><span>Search</span><input id="region-search" name="search" type="search" autocomplete="off" aria-label="Search posts by CVE, title, bug class, or article text" aria-controls="post-search-results memory-list" placeholder="CVE, title, or article text" spellcheck="false" /></label>
+      <span class="map-count" data-range-count>{regions.length} ranges</span>
+    </div>
+
+    <div class="navigation-band" role="group" aria-label="Section navigation">
+      <p id="navigation-help" class="sr-only">Left and right arrows move the address cursor. Home and End move to the boundaries. Enter or Space selects the section at that address. Tab reaches the section links below.</p>
+      <button class="navigation-band-track" type="button" aria-label="Navigate address space" aria-describedby="navigation-help" data-nav-track data-map-start={mapStart.toString(16)} data-map-end={mapEnd.toString(16)}>
+        {regions.map((region) => <span
+          class:list={[
+            'navigation-segment',
+            {
+              'is-child': region.depth,
+              'is-code': region.type === 'CODE',
+              'is-data': region.type === 'DATA',
+              'is-region': region.type !== 'CODE' && region.type !== 'DATA',
+            },
+          ]}
+          style={mapStyle(region.base, region.size)}
+          data-nav-region={region.id}
+          title={`${region.name} ${region.base}`}
+          aria-hidden="true"
+        ></span>)}
+        <span class="navigation-cursor" data-nav-cursor aria-hidden="true"></span>
+      </button>
+    </div>
+
+    <section class="post-search-results" id="post-search-results" data-post-search-results aria-labelledby="post-search-title" hidden>
+      <h2 class="sr-only" id="post-search-title">Post search results</h2>
+      <div class="post-search-list" role="table" aria-label="Matching posts" data-post-search-list>
+        <div class="post-search-header" role="row">
+          <span role="columnheader">ADDRESS</span><span role="columnheader">POST</span><span role="columnheader">BUG CLASS</span>
+        </div>
+        {searchablePosts.map(({ post, allocation, index, titleSearch, metaSearch, bodySearch }) => (
+          <div
+            class="post-search-row"
+            role="row"
+            data-post-search-row
+            data-search-title={titleSearch}
+            data-search-meta={metaSearch}
+            data-search-body={bodySearch}
+            data-search-order={index}
+          >
+            <span class="post-search-address" role="cell">{formatAddress(allocation.contentAddress)}</span>
+            <span class="post-search-copy" role="cell">
+              <a class="post-search-link" href={`${base}posts/${post.slug}/`}>
+                <strong>{post.data.title}</strong>
+                <small>{post.data.description}</small>
+              </a>
+            </span>
+            <span class="post-search-category" role="cell">{post.data.category}</span>
+          </div>
+        ))}
+      </div>
+      <div class="post-search-empty" data-post-search-empty hidden>
+        <strong>No posts found for “<span data-post-search-query></span>”.</strong>
+        <span>Try a CVE, title, bug class, or phrase from an article.</span>
+      </div>
+    </section>
+    <p class="sr-only" role="status" aria-atomic="true" data-search-status></p>
+
+    <div class="memory-table" role="region" aria-label="Memory map">
+      <div class="memory-header" aria-hidden="true">
+        <span class="col-base">BASE</span><span class="col-size">SIZE</span><span class="col-type">TYPE</span><span class="col-protect">PROTECT</span><span class="col-name">NAME</span><span class="col-info">INFO</span><span class="col-state">STATE</span>
+      </div>
+      <div class="memory-list" id="memory-list">
+        {regions.map((region) => <DebuggerRegionRow {...region} childIds={childIdsByParent[region.id] ?? []} hidden={Boolean(region.parentId)} />)}
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    const rows = [...document.querySelectorAll<HTMLElement>('[data-region-row]')];
+    const navTrack = document.querySelector<HTMLButtonElement>('[data-nav-track]');
+    const navSegments = [...document.querySelectorAll<HTMLElement>('[data-nav-region]')];
+    const navCursor = document.querySelector<HTMLElement>('[data-nav-cursor]');
+    const analysisRoot = document.querySelector<HTMLElement>('[data-analysis-root]');
+    const analysisStatus = document.querySelector<HTMLElement>('[data-analysis-status]');
+    const analysisAnnouncer = document.querySelector<HTMLElement>('[data-analysis-announcer]');
+    const navigationBand = document.querySelector<HTMLElement>('.navigation-band');
+    const memoryTable = document.querySelector<HTMLElement>('.memory-table');
+    const statusAddress = document.querySelector<HTMLElement>('[data-status-address]');
+    const statusLocation = document.querySelector<HTMLElement>('[data-status-location]');
+    const filterInput = document.querySelector<HTMLInputElement>('#region-search');
+    const rangeCount = document.querySelector<HTMLElement>('[data-range-count]');
+    const searchStatus = document.querySelector<HTMLElement>('[data-search-status]');
+    const postSearchResults = document.querySelector<HTMLElement>('[data-post-search-results]');
+    const postSearchList = document.querySelector<HTMLElement>('[data-post-search-list]');
+    const postSearchRows = [...document.querySelectorAll<HTMLElement>('[data-post-search-row]')];
+    const postSearchEmpty = document.querySelector<HTMLElement>('[data-post-search-empty]');
+    const postSearchQuery = document.querySelector<HTMLElement>('[data-post-search-query]');
+    let searchAnnouncement: ReturnType<typeof setTimeout>;
+    const rowById = new Map(rows.map((row) => [row.dataset.regionId ?? '', row]));
+    const segmentById = new Map(navSegments.map((segment) => [segment.dataset.navRegion ?? '', segment]));
+    const topLevelRows = rows.filter((row) => !row.dataset.parentId);
+    const mapStart = Number.parseInt(navTrack?.dataset.mapStart ?? '400000', 16);
+    const mapEnd = Number.parseInt(navTrack?.dataset.mapEnd ?? '710000', 16);
+    const mapSpan = mapEnd - mapStart;
+    let navAddress = mapStart;
+    let analysisRunning = false;
+
+    const clamp = (value: number, minimum: number, maximum: number) => Math.min(Math.max(value, minimum), maximum);
+    const formatAddress = (address: number) => address.toString(16).padStart(16, '0').toUpperCase();
+    const rowAddress = (row: HTMLElement) => Number.parseInt(row.dataset.base ?? '', 16);
+    const rowSize = (row: HTMLElement) => Number.parseInt(row.dataset.size ?? '', 16);
+
+    const rowForAddress = (address: number) => {
+      const availableRows = rows.filter((row) => !row.hidden);
+      const containing = availableRows
+        .filter((row) => {
+          const base = rowAddress(row);
+          const size = rowSize(row);
+          return Number.isFinite(base) && Number.isFinite(size) && address >= base && address < base + size;
+        })
+        .sort((left, right) => rowSize(left) - rowSize(right));
+      if (containing[0]) return containing[0];
+      return availableRows.reduce<HTMLElement | undefined>((closest, row) => {
+        if (!closest) return row;
+        return Math.abs(rowAddress(row) - address) < Math.abs(rowAddress(closest) - address) ? row : closest;
+      }, undefined);
+    };
+
+    const setNavigationAddress = (address: number) => {
+      navAddress = clamp(Math.round(address), mapStart, mapEnd);
+      const ratio = (navAddress - mapStart) / mapSpan;
+      navTrack?.style.setProperty('--nav-position', `${(ratio * 100).toFixed(3)}%`);
+      navCursor?.style.setProperty('--nav-position', `${(ratio * 100).toFixed(3)}%`);
+      if (analysisRunning) navTrack?.style.setProperty('--analysis-position', `${(ratio * 100).toFixed(3)}%`);
+      if (statusAddress) statusAddress.textContent = formatAddress(navAddress);
+      if (!analysisRunning) navTrack?.setAttribute('aria-label', `Navigate address space. Address ${formatAddress(navAddress)}, ${rowForAddress(navAddress)?.dataset.name ?? 'unmapped'}`);
+    };
+
+    const selectRegion = (row: HTMLElement) => {
+      rows.forEach((candidate) => candidate.setAttribute('aria-current', String(candidate === row)));
+      navSegments.forEach((segment) => segment.classList.toggle('is-selected', segment.dataset.navRegion === row.dataset.regionId));
+      if (statusLocation) statusLocation.textContent = row.dataset.name ?? '';
+      setNavigationAddress(rowAddress(row));
+    };
+
+    const settleNavigationToSelection = () => {
+      const selectedRow = rows.find((row) => !row.hidden && row.getAttribute('aria-current') === 'true')
+        ?? rows.find((row) => !row.hidden)
+        ?? rows[0];
+      navTrack?.style.removeProperty('--analysis-position');
+      if (selectedRow) selectRegion(selectedRow);
+      else setNavigationAddress(mapStart);
+    };
+
+    const setExpanded = (row: HTMLElement, expanded: boolean) => {
+      const childIds = row.dataset.childIds?.split(' ').filter(Boolean) ?? [];
+      row.setAttribute('aria-expanded', String(expanded));
+      childIds.forEach((childId) => {
+        const child = rowById.get(childId);
+        if (!child) return;
+        child.hidden = !expanded;
+        if (!expanded && child.dataset.childIds) setExpanded(child, false);
+      });
+      syncNavigationVisibility();
+    };
+
+    const syncNavigationVisibility = () => {
+      navSegments.forEach((segment) => {
+        const row = rowById.get(segment.dataset.navRegion ?? '');
+        segment.classList.toggle('is-collapsed', Boolean(row?.hidden));
+      });
+    };
+
+    const applySearch = () => {
+      const query = filterInput?.value.trim().toLowerCase() ?? '';
+      const tokens = query.split(/\s+/).filter(Boolean);
+      const searching = tokens.length > 0;
+
+      if (searching) cancelAnalysis(true);
+
+      if (navigationBand) navigationBand.hidden = searching;
+      if (memoryTable) memoryTable.hidden = searching;
+      if (postSearchResults) postSearchResults.hidden = !searching;
+
+      if (!searching) {
+        postSearchRows.forEach((row) => { row.hidden = false; });
+        if (postSearchEmpty) postSearchEmpty.hidden = true;
+        if (rangeCount) rangeCount.textContent = `${rows.length} ranges`;
+        settleNavigationToSelection();
+        clearTimeout(searchAnnouncement);
+        searchAnnouncement = setTimeout(() => {
+          if (searchStatus) searchStatus.textContent = 'Post search cleared. Memory map shown.';
+        }, 120);
+        return;
+      }
+
+      const score = (row: HTMLElement) => {
+        const title = row.dataset.searchTitle ?? '';
+        const meta = row.dataset.searchMeta ?? '';
+        const body = row.dataset.searchBody ?? '';
+        return tokens.reduce((total, token) => total
+          + (title.includes(token) ? 12 : 0)
+          + (meta.includes(token) ? 6 : 0)
+          + (body.includes(token) ? 2 : 0), title.includes(query) ? 18 : 0);
+      };
+      const matches = postSearchRows
+        .filter((row) => {
+          const content = `${row.dataset.searchTitle ?? ''} ${row.dataset.searchMeta ?? ''} ${row.dataset.searchBody ?? ''}`;
+          return tokens.every((token) => content.includes(token));
+        })
+        .sort((left, right) => score(right) - score(left)
+          || Number(left.dataset.searchOrder ?? 0) - Number(right.dataset.searchOrder ?? 0));
+      const matchSet = new Set(matches);
+      postSearchRows.forEach((row) => { row.hidden = !matchSet.has(row); });
+      if (postSearchList) postSearchList.append(...matches);
+      if (rangeCount) rangeCount.textContent = `${matches.length} ${matches.length === 1 ? 'post' : 'posts'}`;
+      if (postSearchEmpty) postSearchEmpty.hidden = matches.length > 0;
+      if (postSearchQuery) postSearchQuery.textContent = filterInput?.value.trim() ?? '';
+      clearTimeout(searchAnnouncement);
+      searchAnnouncement = setTimeout(() => {
+        if (searchStatus) searchStatus.textContent = `${matches.length} ${matches.length === 1 ? 'post' : 'posts'} found for ${query}.`;
+      }, 120);
+    };
+
+    const revealParent = (row: HTMLElement) => {
+      if (!row.dataset.parentId) return;
+      const parent = rowById.get(row.dataset.parentId);
+      if (parent) setExpanded(parent, true);
+    };
+
+    const activateAddress = (address: number) => {
+      setNavigationAddress(address);
+      const row = rowForAddress(navAddress);
+      if (!row) return;
+      revealParent(row);
+      selectRegion(row);
+      row.scrollIntoView({ block: 'nearest' });
+    };
+
+    const setAnalysisState = (row: HTMLElement, state: 'pending' | 'active' | 'mapped') => {
+      row.dataset.analysis = state;
+      row.inert = state !== 'mapped';
+      if (state === 'mapped') row.removeAttribute('aria-hidden');
+      else row.setAttribute('aria-hidden', 'true');
+      const segment = segmentById.get(row.dataset.regionId ?? '');
+      if (segment) segment.dataset.analysis = state;
+      const stateCell = row.querySelector<HTMLElement>('.region-state');
+      if (stateCell) stateCell.textContent = state === 'pending' ? 'QUEUED' : state === 'active' ? 'ANALYZING' : (row.dataset.state ?? 'MAPPED');
+      if (state === 'mapped') {
+        const children = row.dataset.childIds?.split(' ').filter(Boolean) ?? [];
+        children.forEach((childId) => {
+          const child = rowById.get(childId);
+          const childSegment = segmentById.get(childId);
+          if (child) child.dataset.analysis = 'mapped';
+          if (childSegment) childSegment.dataset.analysis = 'mapped';
+        });
+      }
+    };
+
+    const restoreAnalysisState = () => {
+      rows.forEach((row) => {
+        delete row.dataset.analysis;
+        row.inert = false;
+        row.removeAttribute('aria-hidden');
+        const stateCell = row.querySelector<HTMLElement>('.region-state');
+        if (stateCell) stateCell.textContent = row.dataset.state ?? '';
+      });
+      navSegments.forEach((segment) => { delete segment.dataset.analysis; });
+      navTrack?.style.removeProperty('--analysis-position');
+      analysisRoot?.classList.remove('is-analyzing');
+      analysisRoot?.removeAttribute('aria-busy');
+      if (analysisStatus) analysisStatus.textContent = 'idle';
+    };
+
+    const finishAnalysis = (selectEntry: boolean) => {
+      if (!analysisRunning && !analysisRoot?.classList.contains('is-analyzing')) return;
+      const shouldSettle = analysisRoot?.classList.contains('is-finalizing') ?? false;
+      analysisRunning = false;
+      restoreAnalysisState();
+      if (selectEntry) settleNavigationToSelection();
+      if (analysisRoot) {
+        if (shouldSettle) requestAnimationFrame(() => analysisRoot.classList.remove('is-finalizing'));
+        else analysisRoot.classList.remove('is-finalizing');
+      }
+      if (analysisAnnouncer) analysisAnnouncer.textContent = `${topLevelRows.length} memory sections mapped. Autoanalysis complete.`;
+    };
+
+    const cancelAnalysis = (settleSelection = false) => {
+      if (analysisRunning) finishAnalysis(settleSelection);
+    };
+
+    const wait = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
+    const randomDelay = (minimum: number, maximum: number) => Math.round(minimum + Math.random() * (maximum - minimum));
+    const sectionDelay = () => randomDelay(12, 48) + (Math.random() < 0.12 ? randomDelay(35, 90) : 0);
+    const sweepAddress = (from: number, to: number, duration: number) => new Promise<void>((resolve) => {
+      const started = performance.now();
+      const frame = (now: number) => {
+        if (!analysisRunning) { resolve(); return; }
+        const progress = Math.min(1, (now - started) / duration);
+        setNavigationAddress(from + (to - from) * progress);
+        if (progress < 1) requestAnimationFrame(frame); else resolve();
+      };
+      requestAnimationFrame(frame);
+    });
+
+    const runInitialAnalysis = async () => {
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const forceAnalysis = new URLSearchParams(window.location.search).has('analysis');
+      if (!analysisRoot || !navTrack) {
+        if (rows[0]) selectRegion(rows[0]);
+        return;
+      }
+      const steppedAnalysis = reducedMotion && !forceAnalysis;
+
+      analysisRunning = true;
+      analysisRoot.classList.remove('is-finalizing');
+      analysisRoot.classList.add('is-analyzing');
+      analysisRoot.setAttribute('aria-busy', 'true');
+      topLevelRows.forEach((row) => setAnalysisState(row, 'pending'));
+      if (analysisStatus) analysisStatus.textContent = 'analyzing';
+      if (analysisAnnouncer) analysisAnnouncer.textContent = 'Autoanalysis started.';
+      setNavigationAddress(mapStart);
+      await wait(steppedAnalysis ? randomDelay(35, 70) : randomDelay(50, 100));
+
+      for (const row of topLevelRows) {
+        if (!analysisRunning) return;
+        const start = rowAddress(row);
+        const size = rowSize(row);
+        const end = Math.min(mapEnd, start + Math.max(1, size));
+        setAnalysisState(row, 'active');
+        if (steppedAnalysis) {
+          setNavigationAddress(start);
+          await wait(randomDelay(45, 90));
+          setNavigationAddress(end);
+        } else {
+          const duration = 130 + Math.min(210, Math.sqrt(size / mapSpan) * 540);
+          await sweepAddress(start, end, duration);
+        }
+        if (!analysisRunning) return;
+        setAnalysisState(row, 'mapped');
+        await wait(steppedAnalysis ? randomDelay(20, 55) : sectionDelay());
+      }
+
+      if (analysisStatus) analysisStatus.textContent = 'finalizing';
+      analysisRoot.classList.add('is-finalizing');
+      await wait(steppedAnalysis ? randomDelay(30, 60) : randomDelay(140, 190));
+      finishAnalysis(true);
+    };
+
+    navTrack?.addEventListener('click', (event) => {
+      cancelAnalysis();
+      const bounds = navTrack.getBoundingClientRect();
+      const ratio = clamp((event.clientX - bounds.left) / bounds.width, 0, 1);
+      activateAddress(mapStart + ratio * mapSpan);
+    });
+
+    navTrack?.addEventListener('pointermove', (event) => {
+      const bounds = navTrack.getBoundingClientRect();
+      const ratio = clamp((event.clientX - bounds.left) / bounds.width, 0, 1);
+      const row = rowForAddress(mapStart + ratio * mapSpan);
+      navTrack.title = row ? `${row.dataset.name} — ${row.dataset.description}` : '';
+    });
+
+    navTrack?.addEventListener('keydown', (event) => {
+      cancelAnalysis();
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault();
+        const direction = event.key === 'ArrowLeft' ? -1 : 1;
+        setNavigationAddress(navAddress + direction * 0x1000);
+        return;
+      }
+      if (event.key === 'Home' || event.key === 'End') {
+        event.preventDefault();
+        setNavigationAddress(event.key === 'Home' ? mapStart : mapEnd);
+        return;
+      }
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        activateAddress(navAddress);
+      }
+    });
+
+    rows.forEach((row) => row.addEventListener('click', () => {
+      cancelAnalysis();
+      selectRegion(row);
+      if (row.dataset.childIds) setExpanded(row, row.getAttribute('aria-expanded') !== 'true');
+    }));
+    filterInput?.addEventListener('input', applySearch);
+    filterInput?.addEventListener('keydown', (event) => { if (event.key === 'Escape' && filterInput.value) { filterInput.value = ''; applySearch(); } });
+    syncNavigationVisibility();
+    void runInitialAnalysis();
+  </script>
+</BaseLayout>

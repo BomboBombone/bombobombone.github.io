@@ -1,0 +1,54 @@
+---
+import { getCollection } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
+import type { GetStaticPaths } from 'astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PostStringTable from '../../components/PostStringTable.astro';
+import { buildAddressSpace, type PostAllocation } from '../../data/addressSpace';
+import { webCategories, type WebCategoryDefinition } from '../../data/webCategories';
+
+export const getStaticPaths = (async () => {
+  const posts = await getCollection('posts', ({ data }) => data.published);
+  const { postAllocations } = buildAddressSpace(posts, import.meta.env.BASE_URL);
+  return webCategories.map((category) => ({
+    params: { category: category.slug },
+    props: {
+      category,
+      allocations: postAllocations,
+      posts: posts
+        .filter((post) => post.data.category === category.category)
+        .sort((left, right) => left.data.title.localeCompare(right.data.title, 'en', { sensitivity: 'base' })),
+    },
+  }));
+}) satisfies GetStaticPaths;
+
+interface Props {
+  category: WebCategoryDefinition;
+  posts: CollectionEntry<'posts'>[];
+  allocations: Record<string, PostAllocation>;
+}
+
+const { category, posts, allocations } = Astro.props;
+const base = import.meta.env.BASE_URL;
+const countLabel = `${posts.length} ${posts.length === 1 ? 'post' : 'posts'}`;
+---
+
+<BaseLayout title={`${category.label} — BomboBombone`} description={`Published ${category.label.toLowerCase()} security research by Marco Paciaroni.`}>
+  <main class="disassembly-app" id="debugger-content" tabindex="-1">
+    <h1 class="sr-only">{category.label} security posts</h1>
+    <div class="disassembly-toolbar">
+      <a class="disassembly-back" href={base} data-history-back aria-label="Back to memory map"><span class="disassembly-back-icon" aria-hidden="true"></span><span>BACK</span></a>
+      <div class="disassembly-title"><strong>{category.name}</strong><span>{category.label}</span></div>
+      <span class="disassembly-count">{countLabel}</span>
+    </div>
+
+    <PostStringTable
+      posts={posts}
+      allocations={allocations}
+      tableId={`web-${category.slug}-table`}
+      resizeKey={`web-${category.slug}`}
+      emptyHeading="REGION UNMAPPED"
+      emptyMessage="No published research in this class."
+    />
+  </main>
+</BaseLayout>

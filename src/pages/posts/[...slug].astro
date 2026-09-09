@@ -1,0 +1,46 @@
+---
+import { getCollection, render, type CollectionEntry } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import HexPostViewer from '../../components/HexPostViewer.astro';
+import { buildAddressSpace, type PostAllocation } from '../../data/addressSpace';
+
+interface Props { post: CollectionEntry<'posts'>; allocation: PostAllocation; }
+
+export async function getStaticPaths() {
+  const posts = await getCollection('posts', ({ data }) => data.published);
+  const { postAllocations } = buildAddressSpace(posts, import.meta.env.BASE_URL);
+  return posts.map((post) => ({ params: { slug: post.slug }, props: { post, allocation: postAllocations[post.slug] } }));
+}
+
+const { post, allocation } = Astro.props as Props;
+const { Content } = await render(post);
+const { title, description, date, readingTime, category, socialImage, socialImageAlt } = post.data;
+const base = import.meta.env.BASE_URL;
+const publishedDate = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+---
+
+<BaseLayout
+  title={`${title} — BomboBombone`}
+  description={description}
+  socialTitle={title}
+  socialImage={socialImage}
+  socialImageAlt={socialImageAlt}
+  pageType="article"
+  publishedTime={date}
+>
+  <main class="note-view" id="debugger-content" tabindex="-1">
+    <div class="disassembly-toolbar">
+      <a class="disassembly-back" href={base} data-history-back aria-label="Back to memory map"><span class="disassembly-back-icon" aria-hidden="true"></span><span>BACK</span></a>
+      <div class="disassembly-title"><strong>{allocation.regionName.toUpperCase()}</strong><span>{category}</span></div>
+      <span class="disassembly-count">{publishedDate} · {readingTime}</span>
+    </div>
+
+    <header class="post-header">
+      <div class="post-header-kicker">{category} · {publishedDate}</div>
+      <h1>{title}</h1>
+      <p>{description}</p>
+    </header>
+
+    <HexPostViewer source={post.body} baseAddress={allocation.contentAddress} byteLength={allocation.byteLength} regionId={allocation.regionId} regionName={allocation.regionName}><Content /></HexPostViewer>
+  </main>
+</BaseLayout>

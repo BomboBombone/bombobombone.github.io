@@ -1,0 +1,479 @@
+---
+interface Props {
+  source: string;
+  baseAddress: number;
+  byteLength: number;
+  regionId: string;
+  regionName: string;
+}
+
+const { source, baseAddress, byteLength, regionId, regionName } = Astro.props;
+const normalizedSource = source.replace(/\r\n?/g, '\n');
+const measuredByteLength = new TextEncoder().encode(normalizedSource).length;
+const mappedByteLength = byteLength;
+if (mappedByteLength !== measuredByteLength) throw new Error(`Post byte length mismatch in ${regionId}: expected ${mappedByteLength}, measured ${measuredByteLength}`);
+const editorId = `hex-post-editor-${baseAddress.toString(16)}`;
+const byteDumpListId = `hex-post-bytes-${baseAddress.toString(16)}`;
+---
+
+<section class="hex-post-viewer" data-hex-viewer data-base-address={baseAddress.toString(16)} data-byte-length={mappedByteLength} data-region-id={regionId} data-region-name={regionName} aria-label="Research post viewer">
+  <div class="hex-post-toolbar">
+    <div class="hex-post-view-title"><strong>POST VIEW</strong><span>TEXT / UTF-8</span></div>
+    <div class="hex-post-modes" role="group" aria-label="Post content view">
+      <button class="hex-post-mode is-active" type="button" data-hex-mode="rendered" aria-pressed="true">RENDERED</button>
+      <button class="hex-post-mode" type="button" data-hex-mode="source" aria-pressed="false">SOURCE</button>
+      <button class="hex-post-mode hex-post-details-toggle" type="button" data-hex-mode="bytes" aria-label="View hexadecimal bytes" aria-pressed="false">HEX</button>
+    </div>
+  </div>
+
+  <div class="hex-post-columns" role="group" aria-label="Post columns">
+    <span class="hex-post-column-address">ADDRESS<button class="hex-post-column-resizer" type="button" role="separator" aria-orientation="vertical" aria-label="Resize address column" aria-controls={editorId} aria-valuemin="120" aria-valuenow="144" aria-valuemax="152" data-hex-address-resizer></button></span>
+    <span class="hex-post-column-content">MARKDOWN</span>
+    <span class="hex-post-column-bytes">BYTES</span>
+  </div>
+
+  <div class="hex-post-byte-dump" data-hex-byte-dump hidden tabindex="0" role="region" aria-label="UTF-8 hexadecimal byte dump">
+    <div class="hex-post-byte-dump-header">
+      <span class="hex-post-byte-dump-heading">ADDRESS<button class="hex-post-byte-column-resizer" type="button" role="separator" aria-orientation="vertical" aria-label="Resize hexadecimal address column" aria-controls={byteDumpListId} aria-valuemin="72" aria-valuenow="104" aria-valuemax="176" data-hex-byte-resizer="address"></button></span>
+      <span class="hex-post-byte-dump-heading">HEX BYTES<button class="hex-post-byte-column-resizer" type="button" role="separator" aria-orientation="vertical" aria-label="Resize hexadecimal bytes column" aria-controls={byteDumpListId} aria-valuemin="120" aria-valuenow="390" aria-valuemax="720" data-hex-byte-resizer="hex"></button></span>
+      <span class="hex-post-byte-dump-heading">TEXT</span>
+    </div>
+    <div class="hex-post-byte-dump-list" id={byteDumpListId} data-hex-byte-dump-list role="group" aria-label="Address, hexadecimal bytes, and decoded text; matching lines form one row">
+      <pre class="hex-post-byte-buffer hex-post-byte-address" data-hex-byte-address-buffer aria-label="Address column"></pre>
+      <pre class="hex-post-byte-buffer hex-post-byte-hex" data-hex-byte-hex-buffer aria-label="Hexadecimal bytes column"></pre>
+      <pre class="hex-post-byte-buffer hex-post-byte-text" data-hex-byte-text-buffer aria-label="Decoded text column"></pre>
+    </div>
+  </div>
+
+  <div class="hex-post-editor" id={editorId} data-hex-editor>
+    <div class="hex-post-gutter hex-post-address-gutter" data-hex-addresses aria-hidden="true"></div>
+    <div class="hex-post-center">
+      <article class="hex-post-content" data-hex-rendered>
+        <slot />
+      </article>
+      <pre class="hex-post-source" data-hex-source-content hidden tabindex="0" role="region" aria-label="Markdown source">{normalizedSource}</pre>
+    </div>
+    <div class="hex-post-gutter hex-post-bytes-gutter" data-hex-bytes aria-hidden="true"></div>
+  </div>
+
+  <div class="hex-post-status" role="status" aria-live="polite">
+    <span data-hex-status>{mappedByteLength} UTF-8 BYTES</span>
+    <span>{regionName.toUpperCase()} · ADDRESSES ARE UTF-8 BYTE OFFSETS</span>
+  </div>
+</section>
+
+<script>
+  const viewers = document.querySelectorAll<HTMLElement>('[data-hex-viewer]');
+
+  viewers.forEach((viewer) => {
+    const editor = viewer.querySelector<HTMLElement>('[data-hex-editor]');
+    const rendered = viewer.querySelector<HTMLElement>('[data-hex-rendered]');
+    const sourceView = viewer.querySelector<HTMLElement>('[data-hex-source-content]');
+    const addresses = viewer.querySelector<HTMLElement>('[data-hex-addresses]');
+    const bytes = viewer.querySelector<HTMLElement>('[data-hex-bytes]');
+    const byteDump = viewer.querySelector<HTMLElement>('[data-hex-byte-dump]');
+    const byteDumpList = viewer.querySelector<HTMLElement>('[data-hex-byte-dump-list]');
+    const byteAddressBuffer = viewer.querySelector<HTMLElement>('[data-hex-byte-address-buffer]');
+    const byteHexBuffer = viewer.querySelector<HTMLElement>('[data-hex-byte-hex-buffer]');
+    const byteTextBuffer = viewer.querySelector<HTMLElement>('[data-hex-byte-text-buffer]');
+    const status = viewer.querySelector<HTMLElement>('[data-hex-status]');
+    const modeButtons = Array.from(viewer.querySelectorAll<HTMLButtonElement>('[data-hex-mode]'));
+    const addressResizer = viewer.querySelector<HTMLButtonElement>('[data-hex-address-resizer]');
+    const byteAddressResizer = viewer.querySelector<HTMLButtonElement>('[data-hex-byte-resizer="address"]');
+    const byteHexResizer = viewer.querySelector<HTMLButtonElement>('[data-hex-byte-resizer="hex"]');
+    const baseAddress = Number.parseInt(viewer.dataset.baseAddress ?? '0', 16);
+    const mappedByteLength = Number.parseInt(viewer.dataset.byteLength ?? '0', 10);
+    const regionName = viewer.dataset.regionName ?? '.data';
+
+    if (!editor || !rendered || !sourceView || !addresses || !bytes || !byteDump || !byteDumpList || !byteAddressBuffer || !byteHexBuffer || !byteTextBuffer || !status) return;
+    rendered.querySelectorAll<HTMLElement>('pre, table').forEach((block, index) => {
+      block.tabIndex = 0;
+      if (block.tagName === 'PRE') {
+        block.setAttribute('role', 'region');
+        block.setAttribute('aria-label', `Code example ${index + 1}`);
+      }
+    });
+
+    const encoder = new TextEncoder();
+    const formatAddress = (address: number) => address.toString(16).padStart(16, '0').toUpperCase();
+    const formatBytes = (value: string) => Array.from(encoder.encode(value), (byte) => byte.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+    const sourceBytes = encoder.encode(sourceView.textContent ?? '');
+    const sourceHexBytes = Array.from(sourceBytes, (byte) => byte.toString(16).padStart(2, '0').toUpperCase());
+    const sourceTextBytes = Array.from(sourceBytes, (byte) => byte >= 0x20 && byte <= 0x7e ? String.fromCharCode(byte) : '·');
+    let byteDumpLayout = '';
+
+    const dumpCharacterWidth = (viewerWidth: number) => {
+      const fontSize = viewerWidth <= 480 ? 9 : viewerWidth <= 700 ? 9.5 : 10;
+      return fontSize * 0.602;
+    };
+    const bytesForDumpWidth = (hexWidth: number, viewerWidth: number) => {
+      const characterWidth = dumpCharacterWidth(viewerWidth);
+      const fittingBytes = Math.floor(((Math.max(0, hexWidth - 8) / characterWidth) + 1) / 3);
+      return Math.max(4, Math.min(256, Math.floor(fittingBytes / 2) * 2));
+    };
+    const requiredTextWidth = (bytesPerRow: number, viewerWidth: number) => Math.ceil(bytesPerRow * dumpCharacterWidth(viewerWidth)) + 8;
+
+    const bytesPerDumpRow = () => {
+      const renderedHexWidth = byteHexResizer?.parentElement?.getBoundingClientRect().width;
+      const configuredHexWidth = Number.parseFloat(getComputedStyle(viewer).getPropertyValue('--hex-dump-hex-width'));
+      const hexWidth = configuredHexWidth || renderedHexWidth || 180;
+      const viewerWidth = viewer.getBoundingClientRect().width;
+      return bytesForDumpWidth(hexWidth, viewerWidth);
+    };
+
+    const rebuildByteDump = () => {
+      const bytesPerRow = bytesPerDumpRow();
+      const layout = `${bytesPerRow}:${sourceBytes.length}`;
+      if (layout === byteDumpLayout) return;
+      const rowCount = Math.ceil(sourceBytes.length / bytesPerRow);
+      const addressLines = new Array<string>(rowCount);
+      const hexLines = new Array<string>(rowCount);
+      const textLines = new Array<string>(rowCount);
+
+      for (let rowIndex = 0, offset = 0; rowIndex < rowCount; rowIndex += 1, offset += bytesPerRow) {
+        const end = Math.min(sourceBytes.length, offset + bytesPerRow);
+        addressLines[rowIndex] = (baseAddress + offset).toString(16).padStart(8, '0').toUpperCase();
+        hexLines[rowIndex] = sourceHexBytes.slice(offset, end).join(' ');
+        textLines[rowIndex] = sourceTextBytes.slice(offset, end).join('');
+      }
+
+      byteAddressBuffer.textContent = addressLines.join('\n');
+      byteHexBuffer.textContent = hexLines.join('\n');
+      byteTextBuffer.textContent = textLines.join('\n');
+      byteDumpLayout = layout;
+      status.textContent = `${formatAddress(baseAddress)} · ${sourceBytes.length} UTF-8 bytes · ${bytesPerRow} per row`;
+    };
+
+    let byteDumpRebuildFrame = 0;
+    const scheduleByteDumpRebuild = () => {
+      if (byteDumpRebuildFrame) return;
+      byteDumpRebuildFrame = window.requestAnimationFrame(() => {
+        byteDumpRebuildFrame = 0;
+        flushByteDumpRebuild();
+      });
+    };
+    const flushByteDumpRebuild = () => {
+      if (byteDumpRebuildFrame) window.cancelAnimationFrame(byteDumpRebuildFrame);
+      byteDumpRebuildFrame = 0;
+      if (viewer.classList.contains('is-byte-mode')) rebuildByteDump();
+    };
+
+    const lineTolerance = 4;
+    let gutterLayout = '';
+
+    const appendRowText = (rows: { top: number; text: string }[], top: number, text: string) => {
+      if (!text) return;
+      const row = rows.find((candidate) => Math.abs(candidate.top - top) <= lineTolerance);
+      if (row) row.text += text;
+      else rows.push({ top, text });
+    };
+
+    const rangeLastTop = (textNode: Text, endOffset: number, editorTop: number) => {
+      const range = document.createRange();
+      range.setStart(textNode, 0);
+      range.setEnd(textNode, endOffset);
+      const rects = Array.from(range.getClientRects());
+      range.detach();
+      for (let index = rects.length - 1; index >= 0; index -= 1) {
+        const rect = rects[index];
+        if (rect.width || rect.height) return Math.round(rect.top - editorTop);
+      }
+      return Number.NEGATIVE_INFINITY;
+    };
+
+    const appendTextNodeRows = (rows: { top: number; text: string }[], textNode: Text, editorTop: number) => {
+      const value = textNode.nodeValue ?? '';
+      if (!value) return;
+
+      const range = document.createRange();
+      range.selectNodeContents(textNode);
+      const tops: number[] = [];
+      Array.from(range.getClientRects()).forEach((rect) => {
+        if (!rect.width && !rect.height) return;
+        const top = Math.round(rect.top - editorTop);
+        if (!tops.some((candidate) => Math.abs(candidate - top) <= lineTolerance)) tops.push(top);
+      });
+      range.detach();
+      tops.sort((left, right) => left - right);
+      if (!tops.length) {
+        const parentRect = textNode.parentElement?.getBoundingClientRect();
+        if (parentRect) appendRowText(rows, Math.round(parentRect.top - editorTop), value);
+        return;
+      }
+      if (tops.length === 1) {
+        appendRowText(rows, tops[0], value);
+        return;
+      }
+
+      const boundaries = [0];
+      for (const character of value) boundaries.push(boundaries[boundaries.length - 1] + character.length);
+      let startBoundary = 0;
+
+      for (let line = 0; line < tops.length - 1; line += 1) {
+        const nextTop = tops[line + 1];
+        let low = startBoundary + 1;
+        let high = boundaries.length - 1;
+        let firstBoundaryOnNextLine = high;
+
+        while (low <= high) {
+          const middle = Math.floor((low + high) / 2);
+          if (rangeLastTop(textNode, boundaries[middle], editorTop) >= nextTop - lineTolerance) {
+            firstBoundaryOnNextLine = middle;
+            high = middle - 1;
+          } else {
+            low = middle + 1;
+          }
+        }
+
+        const nextBoundary = Math.max(startBoundary + 1, firstBoundaryOnNextLine - 1);
+        appendRowText(rows, tops[line], value.slice(boundaries[startBoundary], boundaries[nextBoundary]));
+        startBoundary = nextBoundary;
+      }
+
+      appendRowText(rows, tops[tops.length - 1], value.slice(boundaries[startBoundary]));
+    };
+
+    const rebuildGutters = (force = false) => {
+      const active = sourceView.hidden ? rendered : sourceView;
+      const editorRect = editor.getBoundingClientRect();
+      const layout = `${sourceView.hidden ? 'rendered' : 'source'}:${Math.round(active.clientWidth)}:${Math.round(active.scrollHeight)}:${document.fonts?.status ?? 'ready'}`;
+      if (!force && layout === gutterLayout && addresses.childElementCount) return;
+      const rows: { top: number; text: string }[] = [];
+      const walker = document.createTreeWalker(active, NodeFilter.SHOW_TEXT);
+      let node = walker.nextNode();
+
+      while (node) {
+        appendTextNodeRows(rows, node as Text, editorRect.top);
+        node = walker.nextNode();
+      }
+
+      addresses.replaceChildren();
+      bytes.replaceChildren();
+      let offset = 0;
+      rows.sort((left, right) => left.top - right.top).forEach((row) => {
+        const encoded = encoder.encode(row.text);
+        const addressRow = document.createElement('div');
+        const bytesRow = document.createElement('div');
+        addressRow.className = 'hex-post-gutter-row';
+        bytesRow.className = 'hex-post-gutter-row';
+        addressRow.style.top = `${row.top}px`;
+        bytesRow.style.top = `${row.top}px`;
+        addressRow.textContent = formatAddress(baseAddress + offset);
+        bytesRow.textContent = formatBytes(row.text) || '—';
+        bytesRow.title = `${encoded.length} UTF-8 bytes`;
+        addresses.append(addressRow);
+        bytes.append(bytesRow);
+        offset += encoded.length;
+      });
+
+      const modeLabel = sourceView.hidden ? 'rendered' : 'source';
+      status.textContent = `${formatAddress(baseAddress)} · ${rows.length} ${modeLabel} ${rows.length === 1 ? 'line' : 'lines'} · ${mappedByteLength} UTF-8 bytes in ${regionName}`;
+      gutterLayout = layout;
+    };
+
+    let rebuildFrame = 0;
+    let forceScheduledRebuild = false;
+    const scheduleRebuild = (force = false) => {
+      forceScheduledRebuild ||= force;
+      if (rebuildFrame) return;
+      const runRebuild = () => {
+        const shouldForce = forceScheduledRebuild;
+        rebuildFrame = 0;
+        forceScheduledRebuild = false;
+        rebuildGutters(shouldForce);
+      };
+      rebuildFrame = typeof window.requestAnimationFrame === 'function'
+        ? window.requestAnimationFrame(runRebuild)
+        : window.setTimeout(runRebuild, 0);
+    };
+    const defaultAddressWidth = 144;
+    const minimumAddressWidth = 120;
+    const maximumAddressWidth = 152;
+    const addressWidthStorageKey = 'bombo-hex-address-width';
+    const getAddressWidth = () => {
+      const computed = Number.parseFloat(getComputedStyle(viewer).getPropertyValue('--hex-address-width'));
+      return Number.isFinite(computed) ? computed : defaultAddressWidth;
+    };
+    addressResizer?.setAttribute('aria-valuenow', String(Math.round(getAddressWidth())));
+    const setAddressWidth = (width: number, persist = false) => {
+      const bounded = Math.round(Math.min(maximumAddressWidth, Math.max(minimumAddressWidth, width)));
+      viewer.style.setProperty('--hex-address-width', `${bounded}px`);
+      addressResizer?.setAttribute('aria-valuenow', String(bounded));
+      if (persist) {
+        try { localStorage.setItem(addressWidthStorageKey, String(bounded)); } catch {}
+      }
+      scheduleRebuild();
+    };
+    try {
+      const savedAddressWidth = Number(localStorage.getItem(addressWidthStorageKey));
+      if (Number.isFinite(savedAddressWidth) && savedAddressWidth >= minimumAddressWidth && savedAddressWidth <= maximumAddressWidth) setAddressWidth(savedAddressWidth);
+    } catch {}
+    addressResizer?.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const current = getAddressWidth();
+      if (event.key === 'Home') setAddressWidth(minimumAddressWidth, true);
+      else if (event.key === 'End') setAddressWidth(maximumAddressWidth, true);
+      else setAddressWidth(current + (event.key === 'ArrowRight' ? 1 : -1) * (event.shiftKey ? 32 : 8), true);
+    });
+    addressResizer?.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      addressResizer.focus();
+      const startX = event.clientX;
+      const startWidth = getAddressWidth();
+      addressResizer.setPointerCapture(event.pointerId);
+      document.body.classList.add('is-resizing-columns');
+      const move = (moveEvent: PointerEvent) => setAddressWidth(startWidth + moveEvent.clientX - startX);
+      const stop = () => {
+        const finalWidth = getAddressWidth();
+        setAddressWidth(finalWidth, true);
+        document.body.classList.remove('is-resizing-columns');
+        addressResizer.removeEventListener('pointermove', move);
+        addressResizer.removeEventListener('pointerup', stop);
+        addressResizer.removeEventListener('pointercancel', stop);
+      };
+      addressResizer.addEventListener('pointermove', move);
+      addressResizer.addEventListener('pointerup', stop);
+      addressResizer.addEventListener('pointercancel', stop);
+    });
+
+    type ByteColumn = 'address' | 'hex';
+    const byteAddressStorageKey = 'bombo-hex-dump-address-width';
+    const byteHexStorageKey = 'bombo-hex-dump-hex-width';
+    const readSavedWidth = (key: string, fallback: number) => {
+      try {
+        const saved = Number(localStorage.getItem(key));
+        if (Number.isFinite(saved) && saved > 0) return saved;
+      } catch {}
+      return fallback;
+    };
+    let preferredByteAddressWidth = readSavedWidth(byteAddressStorageKey, 104);
+    let preferredByteHexWidth = readSavedWidth(byteHexStorageKey, Math.min(520, Math.max(180, viewer.clientWidth * 0.52)));
+    const byteColumnWidth = (column: ByteColumn) => {
+      const property = column === 'address' ? '--hex-dump-address-width' : '--hex-dump-hex-width';
+      const width = Number.parseFloat(getComputedStyle(viewer).getPropertyValue(property));
+      return Number.isFinite(width) ? width : column === 'address' ? 104 : 390;
+    };
+    const byteColumnBounds = () => {
+      const width = Math.max(280, viewer.clientWidth);
+      const compact = width <= 480;
+      const tablet = width <= 700;
+      const reservedSpace = compact ? 36 : tablet ? 44 : 56;
+      const minimumAddress = compact ? 70 : tablet ? 84 : 88;
+      const minimumHex = compact ? 120 : tablet ? 150 : 180;
+      const minimumText = requiredTextWidth(bytesForDumpWidth(minimumHex, width), width);
+      const maximumAddress = Math.max(minimumAddress, Math.min(176, width - minimumHex - minimumText - reservedSpace));
+      const address = Math.min(maximumAddress, Math.max(minimumAddress, preferredByteAddressWidth));
+      const availableWidth = width - address - reservedSpace;
+      let validHexWidth = minimumHex;
+      let invalidHexWidth = Math.max(minimumHex, Math.floor(availableWidth));
+      while (validHexWidth < invalidHexWidth) {
+        const candidate = Math.ceil((validHexWidth + invalidHexWidth) / 2);
+        const remainingTextWidth = availableWidth - candidate;
+        const candidateIsValid = remainingTextWidth >= requiredTextWidth(bytesForDumpWidth(candidate, width), width);
+        if (candidateIsValid) validHexWidth = candidate;
+        else invalidHexWidth = candidate - 1;
+      }
+      const maximumHex = Math.max(minimumHex, validHexWidth);
+      return { minimumAddress, maximumAddress, minimumHex, maximumHex };
+    };
+    const applyByteColumnWidths = (persist = false) => {
+      const bounds = byteColumnBounds();
+      const address = Math.round(Math.min(bounds.maximumAddress, Math.max(bounds.minimumAddress, preferredByteAddressWidth)));
+      const hex = Math.round(Math.min(bounds.maximumHex, Math.max(bounds.minimumHex, preferredByteHexWidth)));
+      viewer.style.setProperty('--hex-dump-address-width', `${address}px`);
+      viewer.style.setProperty('--hex-dump-hex-width', `${hex}px`);
+      byteAddressResizer?.setAttribute('aria-valuemin', String(Math.round(bounds.minimumAddress)));
+      byteAddressResizer?.setAttribute('aria-valuemax', String(Math.round(bounds.maximumAddress)));
+      byteAddressResizer?.setAttribute('aria-valuenow', String(address));
+      byteHexResizer?.setAttribute('aria-valuemin', String(Math.round(bounds.minimumHex)));
+      byteHexResizer?.setAttribute('aria-valuemax', String(Math.round(bounds.maximumHex)));
+      byteHexResizer?.setAttribute('aria-valuenow', String(hex));
+      const textWidth = Math.max(0, viewer.clientWidth - address - hex - (viewer.clientWidth <= 480 ? 36 : viewer.clientWidth <= 700 ? 44 : 56));
+      byteHexResizer?.setAttribute('aria-valuetext', `${hex} pixels; ${bytesForDumpWidth(hex, viewer.clientWidth)} bytes per row; ${Math.round(textWidth)} pixels for decoded text`);
+      if (persist) {
+        preferredByteAddressWidth = address;
+        preferredByteHexWidth = hex;
+        try {
+          localStorage.setItem(byteAddressStorageKey, String(address));
+          localStorage.setItem(byteHexStorageKey, String(hex));
+        } catch {}
+      }
+    };
+    const setPreferredByteColumnWidth = (column: ByteColumn, width: number, persist = false) => {
+      if (column === 'address') preferredByteAddressWidth = width;
+      else preferredByteHexWidth = width;
+      applyByteColumnWidths(persist);
+    };
+    const bindByteColumnResizer = (resizer: HTMLButtonElement | null, column: ByteColumn) => {
+      resizer?.addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const bounds = byteColumnBounds();
+        const minimum = column === 'address' ? bounds.minimumAddress : bounds.minimumHex;
+        const maximum = column === 'address' ? bounds.maximumAddress : bounds.maximumHex;
+        const current = byteColumnWidth(column);
+        if (event.key === 'Home') setPreferredByteColumnWidth(column, minimum, true);
+        else if (event.key === 'End') setPreferredByteColumnWidth(column, maximum, true);
+        else setPreferredByteColumnWidth(column, current + (event.key === 'ArrowRight' ? 1 : -1) * (event.shiftKey ? 32 : 8), true);
+        flushByteDumpRebuild();
+      });
+      resizer?.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        resizer.focus();
+        const startX = event.clientX;
+        const startWidth = byteColumnWidth(column);
+        resizer.setPointerCapture(event.pointerId);
+        document.body.classList.add('is-resizing-columns');
+        const move = (moveEvent: PointerEvent) => {
+          setPreferredByteColumnWidth(column, startWidth + moveEvent.clientX - startX);
+          scheduleByteDumpRebuild();
+        };
+        const stop = () => {
+          applyByteColumnWidths(true);
+          flushByteDumpRebuild();
+          document.body.classList.remove('is-resizing-columns');
+          resizer.removeEventListener('pointermove', move);
+          resizer.removeEventListener('pointerup', stop);
+          resizer.removeEventListener('pointercancel', stop);
+        };
+        resizer.addEventListener('pointermove', move);
+        resizer.addEventListener('pointerup', stop);
+        resizer.addEventListener('pointercancel', stop);
+      });
+    };
+    applyByteColumnWidths();
+    bindByteColumnResizer(byteAddressResizer, 'address');
+    bindByteColumnResizer(byteHexResizer, 'hex');
+    window.addEventListener('resize', () => {
+      applyByteColumnWidths();
+      if (viewer.classList.contains('is-byte-mode')) scheduleByteDumpRebuild();
+      else scheduleRebuild();
+    }, { passive: true });
+
+    const setMode = (mode: string) => {
+      const byteMode = mode === 'bytes';
+      rendered.hidden = mode !== 'rendered';
+      sourceView.hidden = mode !== 'source';
+      byteDump.hidden = !byteMode;
+      viewer.classList.toggle('is-byte-mode', byteMode);
+      viewer.classList.toggle('is-hiding-bytes', !byteMode);
+      modeButtons.forEach((button) => {
+        const active = button.dataset.hexMode === mode;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', String(active));
+      });
+      if (byteMode) rebuildByteDump();
+      else scheduleRebuild();
+    };
+
+    modeButtons.forEach((button) => button.addEventListener('click', () => setMode(button.dataset.hexMode ?? 'rendered')));
+    setMode('rendered');
+    new ResizeObserver(() => {
+      addressResizer?.setAttribute('aria-valuenow', String(Math.round(getAddressWidth())));
+      if (!viewer.classList.contains('is-byte-mode')) scheduleRebuild();
+    }).observe(editor);
+    window.addEventListener('load', () => scheduleRebuild(), { once: true });
+    document.fonts?.ready.then(() => scheduleRebuild());
+  });
+</script>

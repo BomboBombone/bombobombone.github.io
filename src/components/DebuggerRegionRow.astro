@@ -1,0 +1,95 @@
+---
+interface Props {
+  id: string;
+  base: string;
+  size: string;
+  type: string;
+  protect: string;
+  name: string;
+  surface: string;
+  description: string;
+  notes: string;
+  state: string;
+  depth?: number;
+  parentId?: string;
+  childIds?: string[];
+  hidden?: boolean;
+  href?: string;
+}
+
+const { id, base, size, type, protect, name, surface, description, notes, state, depth = 0, parentId = '', childIds = [], hidden = false, href = '' } = Astro.props;
+const external = href.startsWith('http');
+const expandable = childIds.length > 0;
+const navigable = Boolean(href) && !expandable;
+const searchText = [id, base, size, type, protect, name, surface, description, notes, state].join(' ');
+---
+
+{navigable ? (
+  <a
+    id={`region-${id}`}
+    class:list={['region-row', { 'is-child': depth > 0, 'is-link': true }]}
+    href={href}
+    target={external ? '_blank' : undefined}
+    rel={external ? 'noreferrer' : undefined}
+    hidden={hidden}
+    data-region-row
+    data-region-id={id}
+    data-parent-id={parentId || undefined}
+    data-child-ids={childIds.length ? childIds.join(' ') : undefined}
+    data-base={base}
+    data-size={size}
+    data-type={type}
+    data-protect={protect}
+    data-name={name}
+    data-surface={surface}
+    data-description={description}
+    data-notes={notes}
+    data-state={state}
+    data-href={href}
+    data-search={searchText}
+    aria-current="false"
+    aria-expanded={undefined}
+    aria-controls={undefined}
+  >
+    <span class="region-address">{base}</span>
+    <span class="region-size">{size}</span>
+    <span class="region-type">{type}</span>
+    <span class="region-protect">{protect}</span>
+    <span class="region-name">{childIds.length > 0 && <span class="region-toggle" aria-hidden="true"></span>}{name}</span>
+    <span class="region-description">{description}</span>
+    <span class="region-state">{state}</span>
+  </a>
+) : (
+  <button
+    id={`region-${id}`}
+    class:list={['region-row', { 'is-child': depth > 0, 'is-expandable': expandable }]}
+    type="button"
+    hidden={hidden}
+    data-region-row
+    data-region-id={id}
+    data-parent-id={parentId || undefined}
+    data-child-ids={childIds.length ? childIds.join(' ') : undefined}
+    data-base={base}
+    data-size={size}
+    data-type={type}
+    data-protect={protect}
+    data-name={name}
+    data-surface={surface}
+    data-description={description}
+    data-notes={notes}
+    data-state={state}
+    data-href={href}
+    data-search={searchText}
+    aria-current="false"
+    aria-expanded={expandable ? 'false' : undefined}
+    aria-controls={expandable ? childIds.map((childId) => `region-${childId}`).join(' ') : undefined}
+  >
+    <span class="region-address">{base}</span>
+    <span class="region-size">{size}</span>
+    <span class="region-type">{type}</span>
+    <span class="region-protect">{protect}</span>
+    <span class="region-name">{childIds.length > 0 && <span class="region-toggle" aria-hidden="true"></span>}{name}</span>
+    <span class="region-description">{description}</span>
+    <span class="region-state">{state}</span>
+  </button>
+)}

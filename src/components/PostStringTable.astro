@@ -1,0 +1,50 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { formatAddress, type PostAllocation } from '../data/addressSpace';
+
+interface Props {
+  posts: CollectionEntry<'posts'>[];
+  allocations: Record<string, PostAllocation>;
+  tableId: string;
+  resizeKey: string;
+  emptyHeading?: string;
+  emptyMessage?: string;
+}
+
+const {
+  posts,
+  allocations,
+  tableId,
+  resizeKey,
+  emptyHeading = 'STRING NOT FOUND',
+  emptyMessage = 'No posts yet.',
+} = Astro.props;
+const base = import.meta.env.BASE_URL;
+const addressFor = (post: CollectionEntry<'posts'>) => formatAddress(allocations[post.slug].contentAddress);
+---
+
+<div class="disassembly-table post-string-table" id={tableId} data-resizable-table data-resize-key={resizeKey} role="table" aria-label="Published posts">
+  <div class="disassembly-header" role="row">
+    <span class="disassembly-column" role="columnheader">ADDRESS<button class="column-resizer" type="button" role="separator" aria-orientation="vertical" aria-label="Resize address column" aria-controls={tableId} aria-valuemin="112" aria-valuenow="160" aria-valuemax="800"></button></span>
+    <span class="disassembly-column" role="columnheader">SIZE<button class="column-resizer" type="button" role="separator" aria-orientation="vertical" aria-label="Resize size column" aria-controls={tableId} aria-valuemin="56" aria-valuenow="84" aria-valuemax="800"></button></span>
+    <span class="disassembly-column" role="columnheader">POST</span>
+  </div>
+  <div class="disassembly-list">
+    {posts.length ? posts.map((post) => (
+      <div class="disassembly-row" role="row">
+        <span class="disassembly-address" role="cell">{addressFor(post)}</span>
+        <span class="disassembly-type" role="cell">{allocations[post.slug].byteLength} B</span>
+        <span class="disassembly-string" role="cell"><a class="disassembly-link disassembly-post-link" href={`${base}posts/${post.slug}/`}>{post.data.title}<span class="sr-only"> — open post</span></a></span>
+      </div>
+    )) : (
+      <div role="row"><div role="cell" aria-colspan="3"><div class="data-empty-state">
+        <div class="data-empty-glyph" aria-hidden="true"><span>404</span><small>NO XREF</small></div>
+        <div class="data-empty-copy">
+          <strong>{emptyHeading}</strong>
+          <span>{emptyMessage}</span>
+          <code>; xrefs: 0</code>
+        </div>
+      </div></div></div>
+    )}
+  </div>
+</div>

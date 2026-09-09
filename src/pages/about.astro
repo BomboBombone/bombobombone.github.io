@@ -1,0 +1,111 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { researchCredits } from '../data/researchCredits';
+
+const base = import.meta.env.BASE_URL;
+const posts = await getCollection('posts', ({ data }) => data.published);
+const postBySlug = new Map(posts.map((post) => [post.slug, post]));
+const credits = researchCredits.map((credit) => ({ ...credit, post: postBySlug.get(credit.slug) }));
+const enrichedCredits = credits.map((credit) => {
+  const [target = 'Other', bugClass = 'Other'] = credit.post?.data.category.split(' / ') ?? [];
+  return { ...credit, target, bugClass };
+});
+const groupedCredits = new Map<string, Map<string, typeof enrichedCredits>>();
+
+for (const credit of enrichedCredits) {
+  const targetGroup = groupedCredits.get(credit.target) ?? new Map<string, typeof enrichedCredits>();
+  const classGroup = targetGroup.get(credit.bugClass) ?? [];
+  classGroup.push(credit);
+  targetGroup.set(credit.bugClass, classGroup);
+  groupedCredits.set(credit.target, targetGroup);
+}
+
+const targetGroups = Array.from(groupedCredits, ([target, classMap]) => ({
+  target,
+  count: Array.from(classMap.values()).reduce((total, group) => total + group.length, 0),
+  classes: Array.from(classMap, ([bugClass, grouped]) => ({ bugClass, credits: grouped })),
+}));
+const groupId = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+---
+
+<BaseLayout title={`${credits.length} public CVEs — BomboBombone`} description={`${credits.length} public CVEs credited to Marco Paciaroni, grouped by target and bug class with research write-ups and advisories.`}>
+  <main class="about-app" id="debugger-content" tabindex="-1">
+    <div class="disassembly-toolbar">
+      <a class="disassembly-back" href={base} data-history-back aria-label="Back to memory map"><span class="disassembly-back-icon" aria-hidden="true"></span><span>BACK</span></a>
+      <div class="disassembly-title"><strong>.RSRC</strong><span>RESEARCH INDEX</span></div>
+      <span class="disassembly-count">{credits.length} CVEs</span>
+    </div>
+
+    <header class="about-hero">
+      <img src={`${base}favicon.png`} alt="Marco Paciaroni" width="136" height="136" />
+      <div class="about-hero-copy">
+        <p class="about-kicker">MARCO PACIARONI · BomboBombone</p>
+        <h1>Currently public CVEs: {credits.length}</h1>
+        <p>Grouped by target and bug class, with a write-up and public references for each finding.</p>
+        <nav class="about-links" aria-label="Profile links">
+          <a href="https://github.com/BomboBombone" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a>
+          <a href={`${base}profile/`}>Profile symbols</a>
+          <a href={`${base}data/`}>All posts</a>
+        </nav>
+      </div>
+    </header>
+
+    <section class="about-section" aria-labelledby="public-cves-title">
+      <div class="about-section-heading">
+        <div><p>.rsrc:cves</p><h2 id="public-cves-title">Public CVEs</h2></div>
+        <span>{targetGroups.length} {targetGroups.length === 1 ? 'target' : 'targets'} · grouped by bug class</span>
+      </div>
+      <div class="credit-groups">
+        {targetGroups.map((targetGroup) => {
+          const targetId = `target-${groupId(targetGroup.target)}`;
+          return (
+            <section class="credit-target-group" aria-labelledby={targetId}>
+              <div class="credit-target-heading">
+                <h3 id={targetId}>{targetGroup.target}</h3>
+                <span>{targetGroup.count} {targetGroup.count === 1 ? 'CVE' : 'CVEs'}</span>
+              </div>
+              {targetGroup.classes.map((classGroup) => {
+                const classId = `${targetId}-${groupId(classGroup.bugClass)}`;
+                return (
+                  <section class="credit-class-group" aria-labelledby={classId}>
+                    <div class="credit-class-heading">
+                      <h4 id={classId}>{classGroup.bugClass}</h4>
+                      <span>{classGroup.credits.length}</span>
+                    </div>
+                    <div class="credit-ledger" role="table" aria-label={`${targetGroup.target} ${classGroup.bugClass} vulnerabilities`}>
+                      <div class="credit-header" role="row">
+                        <span role="columnheader">CVE</span><span role="columnheader">WRITE-UP</span><span role="columnheader">REFERENCES</span>
+                      </div>
+                      {classGroup.credits.map(({ cve, slug, advisory, post }) => (
+                        <div class="credit-row" role="row">
+                          <span class="credit-id" role="cell">{cve}</span>
+                          <span class="credit-title" role="cell"><a href={`${base}posts/${slug}/`}>{post?.data.title ?? cve}</a></span>
+                          <span class="credit-references" role="cell">
+                            <a href={advisory} target="_blank" rel="noreferrer">ADVISORY<span class="sr-only"> for {cve} (opens in a new tab)</span></a>
+                            <a href={`https://www.cve.org/CVERecord?id=${cve}`} target="_blank" rel="noreferrer">CVE<span class="sr-only"> record for {cve} (opens in a new tab)</span></a>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </section>
+          );
+        })}
+      </div>
+    </section>
+
+    <section class="about-section tools-section" aria-labelledby="tools-title">
+      <div class="about-section-heading">
+        <div><p>.rsrc:tools</p><h2 id="tools-title">Tools</h2></div>
+        <span>0 exports</span>
+      </div>
+      <div class="tools-placeholder">
+        <code>00000000 &lt;no public symbols&gt;</code>
+        <p>Nothing released here yet. This slot is reserved for tools and scripts.</p>
+      </div>
+    </section>
+  </main>
+</BaseLayout>

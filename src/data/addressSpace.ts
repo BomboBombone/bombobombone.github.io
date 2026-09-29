@@ -166,7 +166,7 @@ export function buildAddressSpace(posts: PublishedPost[], baseUrl: string): Addr
     projectAllocations[record.key] = { ...record, address: pdata.numericBase + record.offset };
   });
 
-  const resourceBytes = researchCredits.reduce((total, credit) => total + utf8ByteLength(credit.cve) + utf8ByteLength(credit.advisory) + 2, 0);
+  const resourceBytes = researchCredits.reduce((total, credit) => total + utf8ByteLength(credit.cve) + utf8ByteLength(credit.advisory ?? '') + utf8ByteLength(credit.patch ?? '') + 2, 0);
   addSimpleSection({ id: 'tooling', type: 'PRV', protect: 'R---', name: '.rsrc', surface: 'TOOLING', description: `Research index · ${researchCredits.length} CVEs`, notes: 'XREF', state: 'MAPPED', href: `${baseUrl}about/` }, Math.max(PAGE_SIZE, resourceBytes));
 
   const addNestedSection = (section: RegionInput, childDefinitions: { id: string; type: string; protect: string; name: string; surface: string; description: string; notes: string; href: string }[]) => {

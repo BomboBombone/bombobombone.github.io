@@ -77,12 +77,13 @@ const groupId = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-
                       <div class="credit-header" role="row">
                         <span role="columnheader">CVE</span><span role="columnheader">WRITE-UP</span><span role="columnheader">REFERENCES</span>
                       </div>
-                      {classGroup.credits.map(({ cve, slug, advisory, post }) => (
+                      {classGroup.credits.map(({ cve, slug, advisory, patch, post }) => (
                         <div class="credit-row" role="row">
                           <span class="credit-id" role="cell">{cve}</span>
                           <span class="credit-title" role="cell"><a href={`${base}posts/${slug}/`}>{post?.data.title ?? cve}</a></span>
                           <span class="credit-references" role="cell">
-                            <a href={advisory} target="_blank" rel="noreferrer">ADVISORY<span class="sr-only"> for {cve} (opens in a new tab)</span></a>
+                            {advisory && <a href={advisory} target="_blank" rel="noreferrer">ADVISORY<span class="sr-only"> for {cve} (opens in a new tab)</span></a>}
+                            {patch && <a href={patch} target="_blank" rel="noreferrer">FIX<span class="sr-only"> for {cve} (opens in a new tab)</span></a>}
                             <a href={`https://www.cve.org/CVERecord?id=${cve}`} target="_blank" rel="noreferrer">CVE<span class="sr-only"> record for {cve} (opens in a new tab)</span></a>
                           </span>
                         </div>

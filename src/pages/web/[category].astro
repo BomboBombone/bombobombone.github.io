@@ -16,7 +16,7 @@ export const getStaticPaths = (async () => {
       category,
       allocations: postAllocations,
       posts: posts
-        .filter((post) => post.data.category === category.category)
+        .filter((post) => post.data.category === category.category || category.aliases?.includes(post.data.category))
         .sort((left, right) => left.data.title.localeCompare(right.data.title, 'en', { sensitivity: 'base' })),
     },
   }));

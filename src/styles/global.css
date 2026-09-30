@@ -35,6 +35,9 @@
   --nav-data: #a9bacb;
   --nav-region: #b8aa68;
   --nav-cursor: #ffd56a;
+  --font-ui-small: 12px;
+  --font-reading: 18px;
+  --leading-reading: 1.75;
   --motion-fast: 120ms;
   --motion-base: 180ms;
   --ease-ui: cubic-bezier(0.2, 0.75, 0.25, 1);
@@ -53,7 +56,7 @@
 
 * { box-sizing: border-box; font-kerning: none; font-variant-ligatures: none; }
 html { min-height: 100%; background: var(--bg); color-scheme: dark; }
-body { min-width: 320px; min-height: 100dvh; margin: 0; overflow-x: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 16px; line-height: 1.5; font-smooth: never; -webkit-font-smoothing: none; }
+body { min-width: 320px; min-height: 100dvh; margin: 0; overflow-x: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 16px; line-height: 1.65; font-smooth: never; -webkit-font-smoothing: none; }
 button, input { font: inherit; }
 a { color: inherit; text-decoration: none; }
 [hidden] { display: none !important; }
@@ -613,6 +616,53 @@ a.ida-comment { min-height: 24px; }
 .column-dialog input { width: 100%; min-height: 44px; accent-color: var(--accent); }
 .column-dialog-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .column-dialog button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--text-dim); background: var(--surface-raised); color: var(--text-strong); cursor: pointer; }
+
+/* Keep the bitmap face legible at small UI sizes and give long-form text room to breathe. */
+.debugger-body :is(
+  .window-state,
+  .map-title strong, .map-title span, .map-count, .map-filter span,
+  .post-search-header, .post-search-address, .post-search-category,
+  .memory-header, .region-address, .region-size, .region-type, .region-protect, .region-state,
+  .disassembly-back, .disassembly-title, .disassembly-title strong, .disassembly-title span,
+  .disassembly-count, .disassembly-header, .disassembly-address, .disassembly-type, .disassembly-xref,
+  .disassembly-empty, .data-empty-glyph small, .data-empty-copy strong, .data-empty-copy code,
+  .unmapped-glyph small, .unmapped-address, .unmapped-probe summary, .unmapped-probe pre,
+  .about-kicker, .about-links a, .about-section-heading p, .about-section-heading > span,
+  .credit-target-heading span, .credit-class-heading span, .credit-class-heading h4,
+  .credit-header, .credit-id, .credit-references, .tools-placeholder code,
+  .ida-view-tabs, .ida-address, .debugger-statusbar, .post-header-kicker,
+  .hex-post-view-title, .hex-post-view-title strong, .hex-post-mode, .hex-post-columns,
+  .hex-post-gutter-row, .hex-post-status, .hex-post-byte-dump-header
+) {
+  font-size: var(--font-ui-small);
+}
+
+.post-search-link strong, .post-search-link small, .memory-list .region-name, .memory-list .region-description,
+.region-name, .region-description, .disassembly-string,
+.data-empty-copy span, .about-section-heading h2, .credit-title, .tools-placeholder p,
+.ida-row {
+  font-size: 14px;
+}
+
+.about-hero-copy > p:not(.about-kicker), .post-header p { font-size: 16px; }
+
+.hex-post-content { font-size: var(--font-reading); line-height: var(--leading-reading); }
+.hex-post-content h2 { margin-top: 34px; font-size: 20px; }
+.hex-post-content h3 { margin-top: 28px; font-size: 17px; }
+.hex-post-content h4 { margin-top: 24px; font-size: 15px; }
+.hex-post-content p, .hex-post-content ul, .hex-post-content ol, .hex-post-content blockquote { margin-bottom: 20px; }
+.hex-post-content li + li { margin-top: 8px; }
+.hex-post-content pre { font-size: 14px; line-height: 1.7; }
+.hex-post-source { font-size: 14px; line-height: 1.8; }
+.hex-post-byte-dump { --hex-dump-font-size: 12px; }
+.hex-post-gutter-row { line-height: 1.5; }
+.about-hero-copy > p:not(.about-kicker) { line-height: 1.75; }
+.post-header p { line-height: 1.7; }
+.debugger-statusbar { line-height: 1.5; }
+
+@media (max-width: 360px) {
+  .window-title strong { font-size: 12px; }
+}
 .column-dialog button:hover { background: var(--row-selected); }
 .map-filter input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .map-filter input { border-color: var(--text-faint); }

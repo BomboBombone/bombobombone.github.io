@@ -32,4 +32,10 @@ export const researchCredits: ResearchCredit[] = [
   { cve: 'CVE-2026-102971', slug: 'cve-2026-102971', advisory: 'https://phabricator.wikimedia.org/T434521' },
   { cve: 'CVE-2026-102973', slug: 'cve-2026-102973', advisory: 'https://phabricator.wikimedia.org/T435022' },
   { cve: 'CVE-2026-102975', slug: 'cve-2026-102975', advisory: 'https://phabricator.wikimedia.org/T435026' },
+  { cve: 'CVE-2026-103437', slug: 'cve-2026-103437', advisory: 'https://phabricator.wikimedia.org/T435863' },
+  { cve: 'CVE-2026-103440', slug: 'cve-2026-103440', advisory: 'https://phabricator.wikimedia.org/T435623', patch: 'https://gerrit.wikimedia.org/r/1346645' },
+  { cve: 'CVE-2026-103441', slug: 'cve-2026-103441', advisory: 'https://phabricator.wikimedia.org/T435210', patch: 'https://gerrit.wikimedia.org/r/1346043' },
+  { cve: 'CVE-2026-103442', slug: 'cve-2026-103442', advisory: 'https://phabricator.wikimedia.org/T435624', patch: 'https://gerrit.wikimedia.org/r/1346057' },
+  { cve: 'CVE-2026-103445', slug: 'cve-2026-103445', advisory: 'https://phabricator.wikimedia.org/T435622', patch: 'https://gerrit.wikimedia.org/r/1329683' },
+  { cve: 'CVE-2026-103446', slug: 'cve-2026-103446', advisory: 'https://phabricator.wikimedia.org/T435086', patch: 'https://gerrit.wikimedia.org/r/1332761' },
 ];

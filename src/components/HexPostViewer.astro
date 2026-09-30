@@ -158,7 +158,10 @@ const byteDumpListId = `hex-post-bytes-${baseAddress.toString(16)}`;
       if (viewer.classList.contains('is-byte-mode')) rebuildByteDump();
     };
 
-    const lineTolerance = 4;
+    // Inline elements such as `code` can report a slightly different rect top
+    // from surrounding text on the same visual line. Group those rects together
+    // so the address gutter does not draw multiple labels over one another.
+    const lineTolerance = 8;
     let gutterLayout = '';
 
     const appendRowText = (rows: { top: number; text: string }[], top: number, text: string) => {

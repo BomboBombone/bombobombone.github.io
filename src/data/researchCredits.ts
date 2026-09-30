@@ -29,4 +29,7 @@ export const researchCredits: ResearchCredit[] = [
   { cve: 'CVE-2026-96878', slug: 'cve-2026-96878', patch: 'https://gerrit.wikimedia.org/r/c/mediawiki/extensions/Cargo/+/1328627' },
   { cve: 'CVE-2026-100380', slug: 'cve-2026-100380', patch: 'https://gerrit.wikimedia.org/r/c/mediawiki/extensions/Wikibase/+/1345192' },
   { cve: 'CVE-2026-100381', slug: 'cve-2026-100381', patch: 'https://gerrit.wikimedia.org/r/c/mediawiki/extensions/UploadWizard/+/1345191' },
+  { cve: 'CVE-2026-102971', slug: 'cve-2026-102971', advisory: 'https://phabricator.wikimedia.org/T434521' },
+  { cve: 'CVE-2026-102973', slug: 'cve-2026-102973', advisory: 'https://phabricator.wikimedia.org/T435022' },
+  { cve: 'CVE-2026-102975', slug: 'cve-2026-102975', advisory: 'https://phabricator.wikimedia.org/T435026' },
 ];

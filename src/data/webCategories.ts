@@ -16,7 +16,7 @@ export const webCategories: WebCategoryDefinition[] = [
   { id: 'web-pay', slug: 'payments', name: '.web.pay', label: 'Payments', category: 'XenForo / Payments', protect: 'ER--' },
   { id: 'web-ssrf', slug: 'ssrf', name: '.web.ssrf', label: 'Server-side request forgery', category: 'XenForo / SSRF', protect: 'ER--' },
   { id: 'web-xss', slug: 'xss', name: '.web.xss', label: 'Cross-site scripting', category: 'XenForo / XSS', aliases: ['MediaWiki / XSS'], protect: 'ER--' },
-  { id: 'web-info', slug: 'disclosure', name: '.web.info', label: 'Information disclosure', category: 'XenForo / Information disclosure', protect: 'R---' },
+  { id: 'web-info', slug: 'disclosure', name: '.web.info', label: 'Information disclosure', category: 'XenForo / Information disclosure', aliases: ['MediaWiki / Information disclosure'], protect: 'R---' },
   { id: 'web-dos', slug: 'dos', name: '.web.dos', label: 'Denial of service', category: 'XenForo / Denial of service', protect: 'ER--' },
 ];
 

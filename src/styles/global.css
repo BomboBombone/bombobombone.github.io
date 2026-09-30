@@ -663,6 +663,16 @@ a.ida-comment { min-height: 24px; }
 @media (max-width: 360px) {
   .window-title strong { font-size: 12px; }
 }
+
+/* Paint Spleen's 1-bit glyphs in a viewport canvas on platforms that smooth web fonts. */
+.bitmap-text-layer { position: fixed; z-index: 2147483647; inset: 0 auto auto 0; display: block; width: 100vw; height: 100vh; pointer-events: none; image-rendering: pixelated; }
+.bitmap-text-native :not(input, input *, textarea, textarea *, select, select *, option, option *, .sr-only, .sr-only *, [hidden], [hidden] *, [data-bitmap-fallback], [data-bitmap-fallback] *) {
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
+}
+.bitmap-text-native [data-bitmap-fallback] {
+  -webkit-text-fill-color: currentColor !important;
+}
 .column-dialog button:hover { background: var(--row-selected); }
 .map-filter input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .map-filter input { border-color: var(--text-faint); }

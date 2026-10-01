@@ -73,7 +73,7 @@ a { color: inherit; text-decoration: none; }
 .window-titlebar { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 16px; padding: 0 14px; }
 .window-title { display: inline-flex; min-width: 0; align-items: center; gap: 7px; white-space: nowrap; }
 .window-icon { display: block; width: 18px; height: 18px; flex: 0 0 auto; padding: 0; border: 1px solid var(--border); border-radius: 2px; object-fit: cover; }
-.window-title strong { color: var(--text-strong); font-size: 14px; font-weight: 650; line-height: 1; }
+.window-title strong { position: relative; top: 2px; color: var(--text-strong); font-size: 14px; font-weight: 650; line-height: 1; }
 .window-title:hover strong { color: var(--accent); }
 .window-state { display: inline-flex; align-items: center; gap: 4px; color: var(--text-dim); font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
 .window-state { white-space: nowrap; }

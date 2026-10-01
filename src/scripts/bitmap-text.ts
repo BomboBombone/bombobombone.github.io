@@ -219,7 +219,9 @@ export async function installBitmapText(): Promise<void> {
   let fallbackParents = new Set<HTMLElement>();
   let redrawQueued = false;
   let selectionActive = false;
-  let bitmapPaintReady = false;
+  const useNativeTextDuringTouchScroll = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+  let nativeTextDuringTouchScroll = false;
+  let touchScrollSettleTimer = 0;
   const body = document.body;
 
   const refreshRuns = (): void => {
@@ -236,8 +238,33 @@ export async function installBitmapText(): Promise<void> {
     if (layer.parentElement !== destination) destination.append(layer);
   };
 
+  // Let the document's Spleen webfont scroll with the compositor on touch devices.
+  // Redraw the crisp canvas after momentum scrolling has stopped.
+  const showNativeTextDuringTouchScroll = (): void => {
+    if (!useNativeTextDuringTouchScroll || selectionActive) return;
+    if (touchScrollSettleTimer) window.clearTimeout(touchScrollSettleTimer);
+    touchScrollSettleTimer = 0;
+    nativeTextDuringTouchScroll = true;
+    body.classList.remove(ACTIVE_CLASS);
+    layer.style.display = 'none';
+  };
+
+  const restoreBitmapTextAfterTouchScroll = (): void => {
+    if (!nativeTextDuringTouchScroll) return;
+    if (touchScrollSettleTimer) window.clearTimeout(touchScrollSettleTimer);
+    touchScrollSettleTimer = window.setTimeout(() => {
+      touchScrollSettleTimer = 0;
+      nativeTextDuringTouchScroll = false;
+      if (selectionActive) return;
+      refreshRuns();
+      layer.style.display = 'block';
+      scheduleRender();
+    }, 140);
+  };
+
   const render = (): void => {
     redrawQueued = false;
+    if (nativeTextDuringTouchScroll) return;
     syncLayer();
     const ratio = Math.max(1, window.devicePixelRatio || 1);
     const width = Math.max(1, Math.ceil(window.innerWidth * ratio));
@@ -268,6 +295,9 @@ export async function installBitmapText(): Promise<void> {
       const destWidth = Math.max(1, Math.round(size * 0.5 * pixelRatio));
       const destHeight = Math.max(1, Math.round(size * pixelRatio));
       const value = run.node.data;
+      range.selectNodeContents(run.node);
+      const runRect = range.getBoundingClientRect();
+      if (runRect.width <= 0 || runRect.bottom < clip.top || runRect.top > clip.bottom) continue;
       let offset = 0;
       const transformedCharacters = transformCharacters(value, run.textTransform);
       context.globalAlpha = run.opacity;
@@ -304,13 +334,7 @@ export async function installBitmapText(): Promise<void> {
       }
     }
     context.globalAlpha = 1;
-    if (!bitmapPaintReady) {
-      bitmapPaintReady = true;
-      if (!selectionActive) {
-        body.classList.add(ACTIVE_CLASS);
-        scheduleRender();
-      }
-    }
+    if (!selectionActive) body.classList.add(ACTIVE_CLASS);
   };
 
   const scheduleRender = (): void => {
@@ -330,7 +354,13 @@ export async function installBitmapText(): Promise<void> {
   observer.observe(body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'open'] });
 
   window.addEventListener('resize', () => { refreshRuns(); scheduleRender(); }, { passive: true });
-  window.addEventListener('scroll', scheduleRender, { capture: true, passive: true });
+  window.addEventListener('scroll', () => {
+    if (nativeTextDuringTouchScroll) restoreBitmapTextAfterTouchScroll();
+    else scheduleRender();
+  }, { capture: true, passive: true });
+  document.addEventListener('touchmove', showNativeTextDuringTouchScroll, { passive: true });
+  document.addEventListener('touchend', restoreBitmapTextAfterTouchScroll, { passive: true });
+  document.addEventListener('touchcancel', restoreBitmapTextAfterTouchScroll, { passive: true });
   document.addEventListener('click', scheduleRender, true);
   document.addEventListener('pointerover', () => { refreshRuns(); scheduleRender(); }, true);
   document.addEventListener('pointerout', () => { refreshRuns(); scheduleRender(); }, true);
@@ -341,9 +371,9 @@ export async function installBitmapText(): Promise<void> {
     const hasSelection = Boolean(document.getSelection() && !document.getSelection()?.isCollapsed);
     if (hasSelection === selectionActive) return;
     selectionActive = hasSelection;
-    layer.style.display = selectionActive ? 'none' : 'block';
+    layer.style.display = selectionActive || nativeTextDuringTouchScroll ? 'none' : 'block';
     if (selectionActive) body.classList.remove(ACTIVE_CLASS);
-    else {
+    else if (!nativeTextDuringTouchScroll) {
       refreshRuns();
       scheduleRender();
     }

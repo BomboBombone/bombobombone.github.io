@@ -110,6 +110,7 @@ a { color: inherit; text-decoration: none; }
 
 .memory-map-app.is-analyzing .navigation-band-track::after { opacity: 1; }
 .memory-map-app.is-analyzing .navigation-cursor::after { opacity: 0.72; }
+.memory-map-app.is-analyzing .navigation-cursor { border-top: 6px solid var(--nav-cursor); border-bottom: 0; }
 .memory-map-app.is-analyzing .navigation-segment { visibility: hidden; opacity: 0; }
 .memory-map-app.is-analyzing .navigation-segment[data-analysis='mapped'] { visibility: visible; filter: none; opacity: 0.82; }
 .memory-map-app.is-analyzing .region-row[data-analysis='pending'],

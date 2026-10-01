@@ -38,4 +38,6 @@ export const researchCredits: ResearchCredit[] = [
   { cve: 'CVE-2026-103442', slug: 'cve-2026-103442', advisory: 'https://phabricator.wikimedia.org/T435624', patch: 'https://gerrit.wikimedia.org/r/1346057' },
   { cve: 'CVE-2026-103445', slug: 'cve-2026-103445', advisory: 'https://phabricator.wikimedia.org/T435622', patch: 'https://gerrit.wikimedia.org/r/1329683' },
   { cve: 'CVE-2026-103446', slug: 'cve-2026-103446', advisory: 'https://phabricator.wikimedia.org/T435086', patch: 'https://gerrit.wikimedia.org/r/1332761' },
+  { cve: 'CVE-2026-103584', slug: 'cve-2026-103584', advisory: 'https://phabricator.wikimedia.org/T435999', patch: 'https://gerrit.wikimedia.org/r/1346780' },
+  { cve: 'CVE-2026-103585', slug: 'cve-2026-103585', advisory: 'https://phabricator.wikimedia.org/T435999', patch: 'https://gerrit.wikimedia.org/r/1346778' },
 ];

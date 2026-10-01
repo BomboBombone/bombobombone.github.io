@@ -219,9 +219,8 @@ export async function installBitmapText(): Promise<void> {
   let fallbackParents = new Set<HTMLElement>();
   let redrawQueued = false;
   let selectionActive = false;
-  const useNativeTextDuringTouchScroll = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
-  let nativeTextDuringTouchScroll = false;
-  let touchScrollSettleTimer = 0;
+  let nativeTextDuringScroll = false;
+  let scrollSettleTimer = 0;
   const body = document.body;
 
   const refreshRuns = (): void => {
@@ -238,34 +237,35 @@ export async function installBitmapText(): Promise<void> {
     if (layer.parentElement !== destination) destination.append(layer);
   };
 
-  // Let the document's Spleen webfont scroll with the compositor on touch devices.
-  // Redraw the crisp canvas after momentum scrolling has stopped.
-  const showNativeTextDuringTouchScroll = (): void => {
-    if (!useNativeTextDuringTouchScroll || selectionActive) return;
-    if (touchScrollSettleTimer) window.clearTimeout(touchScrollSettleTimer);
-    touchScrollSettleTimer = 0;
-    nativeTextDuringTouchScroll = true;
+  // Keep text attached to the document while the browser scrolls on its compositor.
+  // Redraw the crisp canvas after wheel, touch, keyboard, or momentum scrolling settles.
+  const showNativeTextDuringScroll = (): void => {
+    if (selectionActive) return;
+    if (scrollSettleTimer) window.clearTimeout(scrollSettleTimer);
+    scrollSettleTimer = 0;
+    if (nativeTextDuringScroll) return;
+    nativeTextDuringScroll = true;
     body.classList.remove(ACTIVE_CLASS);
     layer.style.display = 'none';
   };
 
-  const restoreBitmapTextAfterTouchScroll = (): void => {
-    if (!nativeTextDuringTouchScroll) return;
-    if (touchScrollSettleTimer) window.clearTimeout(touchScrollSettleTimer);
-    touchScrollSettleTimer = window.setTimeout(() => {
-      touchScrollSettleTimer = 0;
-      nativeTextDuringTouchScroll = false;
+  const restoreBitmapTextAfterScroll = (): void => {
+    if (!nativeTextDuringScroll) return;
+    if (scrollSettleTimer) window.clearTimeout(scrollSettleTimer);
+    scrollSettleTimer = window.setTimeout(() => {
+      scrollSettleTimer = 0;
+      nativeTextDuringScroll = false;
       if (selectionActive) return;
       refreshRuns();
-      layer.style.display = 'block';
       scheduleRender();
-    }, 140);
+    }, 220);
   };
 
   const render = (): void => {
     redrawQueued = false;
-    if (nativeTextDuringTouchScroll) return;
+    if (nativeTextDuringScroll) return;
     syncLayer();
+    if (!selectionActive) layer.style.display = 'block';
     const ratio = Math.max(1, window.devicePixelRatio || 1);
     const width = Math.max(1, Math.ceil(window.innerWidth * ratio));
     const height = Math.max(1, Math.ceil(window.innerHeight * ratio));
@@ -355,12 +355,16 @@ export async function installBitmapText(): Promise<void> {
 
   window.addEventListener('resize', () => { refreshRuns(); scheduleRender(); }, { passive: true });
   window.addEventListener('scroll', () => {
-    if (nativeTextDuringTouchScroll) restoreBitmapTextAfterTouchScroll();
-    else scheduleRender();
+    showNativeTextDuringScroll();
+    restoreBitmapTextAfterScroll();
   }, { capture: true, passive: true });
-  document.addEventListener('touchmove', showNativeTextDuringTouchScroll, { passive: true });
-  document.addEventListener('touchend', restoreBitmapTextAfterTouchScroll, { passive: true });
-  document.addEventListener('touchcancel', restoreBitmapTextAfterTouchScroll, { passive: true });
+  window.addEventListener('wheel', () => {
+    showNativeTextDuringScroll();
+    restoreBitmapTextAfterScroll();
+  }, { capture: true, passive: true });
+  document.addEventListener('touchmove', showNativeTextDuringScroll, { passive: true });
+  document.addEventListener('touchend', restoreBitmapTextAfterScroll, { passive: true });
+  document.addEventListener('touchcancel', restoreBitmapTextAfterScroll, { passive: true });
   document.addEventListener('click', scheduleRender, true);
   document.addEventListener('pointerover', () => { refreshRuns(); scheduleRender(); }, true);
   document.addEventListener('pointerout', () => { refreshRuns(); scheduleRender(); }, true);
@@ -371,9 +375,9 @@ export async function installBitmapText(): Promise<void> {
     const hasSelection = Boolean(document.getSelection() && !document.getSelection()?.isCollapsed);
     if (hasSelection === selectionActive) return;
     selectionActive = hasSelection;
-    layer.style.display = selectionActive || nativeTextDuringTouchScroll ? 'none' : 'block';
+    layer.style.display = 'none';
     if (selectionActive) body.classList.remove(ACTIVE_CLASS);
-    else if (!nativeTextDuringTouchScroll) {
+    else if (!nativeTextDuringScroll) {
       refreshRuns();
       scheduleRender();
     }
@@ -384,7 +388,6 @@ export async function installBitmapText(): Promise<void> {
     layer.style.display = 'none';
   });
   window.addEventListener('afterprint', () => {
-    layer.style.display = 'block';
     refreshRuns();
     scheduleRender();
   });
